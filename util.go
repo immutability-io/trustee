@@ -27,10 +27,13 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/hashicorp/vault/logical"
 )
 
 const (
+	// JWTAlgorithm is for secp256
+	JWTAlgorithm string = "ES256"
 	// ProtocolKeystore JSON keystore URLs start with this
 	ProtocolKeystore string = "keystore://"
 	// MaxKeystoreSize is a heuristic to prevent reading stupid big files
@@ -233,4 +236,11 @@ func dedup(stringSlice []string) []string {
 		}
 	}
 	return returnSlice
+}
+
+func hashKeccak256(data string) []byte {
+	input := []byte(data)
+	msg := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(input), input)
+	hash := crypto.Keccak256([]byte(msg))
+	return hash
 }

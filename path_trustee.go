@@ -16,15 +16,21 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
+	"time"
 
+	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/hashicorp/vault/logical"
 	"github.com/hashicorp/vault/logical/framework"
+	"github.com/satori/go.uuid"
 	"github.com/sethvargo/go-diceware/diceware"
 )
 
@@ -136,7 +142,43 @@ Hash and sign data using the trustee's private key.
 			},
 		},
 		&framework.Path{
-			Pattern:      "trustees/" + framework.GenericNameRegex("name") + "/verify",
+			Pattern:      "trustees/" + framework.GenericNameRegex("name") + "/claim",
+			HelpSynopsis: "Create a JWT containing claims. Sign with trustees ECDSA private key.",
+			HelpDescription: `
+
+Create a JWT containing claims. Sign with trustees ECDSA private key.
+
+`,
+			Fields: map[string]*framework.FieldSchema{
+				"subject": &framework.FieldSchema{
+					Type:        framework.TypeString,
+					Description: "The Subject of the claims. Identified by `sub` in the JWT.",
+				},
+				"audience": &framework.FieldSchema{
+					Type:        framework.TypeString,
+					Description: "The Audience for which these claims are intended. Identified by `aud` in the JWT.",
+				},
+				"expiry": &framework.FieldSchema{
+					Type:        framework.TypeString,
+					Default:     "1h",
+					Description: "The expiry for this token - this is a duration. This will be used to derive `exp` in the JWT.",
+				},
+				"not_before_time": &framework.FieldSchema{
+					Type:        framework.TypeString,
+					Description: "This token cannot be used before this time (UNIX time format) - defaults to now. Identified by `nbf` in the JWT.",
+				},
+				"claims": &framework.FieldSchema{
+					Type:        framework.TypeString,
+					Description: "The claims being asserted. This is a URL encoded JSON blob. (See documentation.)",
+				},
+			},
+			ExistenceCheck: b.pathExistenceCheck,
+			Callbacks: map[logical.Operation]framework.OperationFunc{
+				logical.CreateOperation: b.pathCreateJWT,
+			},
+		},
+		&framework.Path{
+			Pattern:      "trustees/" + framework.GenericNameRegex("name") + "/verify-signature",
 			HelpSynopsis: "Verify that this trustee signed something.",
 			HelpDescription: `
 
@@ -160,7 +202,26 @@ Validate that this trustee signed some data.
 			},
 			ExistenceCheck: b.pathExistenceCheck,
 			Callbacks: map[logical.Operation]framework.OperationFunc{
-				logical.CreateOperation: b.pathVerify,
+				logical.CreateOperation: b.pathVerifySignature,
+			},
+		},
+		&framework.Path{
+			Pattern:      "trustees/" + framework.GenericNameRegex("name") + "/verify-claim",
+			HelpSynopsis: "Verify that this claim (JWT) is good.",
+			HelpDescription: `
+
+Validate that this trustee made a claime.
+
+`,
+			Fields: map[string]*framework.FieldSchema{
+				"claim": &framework.FieldSchema{
+					Type:        framework.TypeString,
+					Description: "The JWT to verify.",
+				},
+			},
+			ExistenceCheck: b.pathExistenceCheck,
+			Callbacks: map[logical.Operation]framework.OperationFunc{
+				logical.CreateOperation: b.pathVerifyClaim,
 			},
 		},
 	}
@@ -283,9 +344,7 @@ func (b *backend) pathSign(ctx context.Context, req *logical.Request, data *fram
 			return nil, err
 		}
 	} else {
-		input := []byte(data.Get("data").(string))
-		msg := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(input), input)
-		hash = crypto.Keccak256([]byte(msg))
+		hash = hashKeccak256(data.Get("data").(string))
 	}
 
 	prunedPath := strings.Replace(req.Path, "/sign", "", -1)
@@ -310,7 +369,7 @@ func (b *backend) pathSign(ctx context.Context, req *logical.Request, data *fram
 	}, nil
 }
 
-func (b *backend) pathVerify(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *backend) pathVerifySignature(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	var hash []byte
 	if data.Get("raw").(bool) {
 		input := data.Get("data").(string)
@@ -320,13 +379,11 @@ func (b *backend) pathVerify(ctx context.Context, req *logical.Request, data *fr
 			return nil, err
 		}
 	} else {
-		input := []byte(data.Get("data").(string))
-		msg := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(input), input)
-		hash = crypto.Keccak256([]byte(msg))
+		hash = hashKeccak256(data.Get("data").(string))
 	}
 	signatureRaw := data.Get("signature").(string)
 
-	prunedPath := strings.Replace(req.Path, "/verify", "", -1)
+	prunedPath := strings.Replace(req.Path, "/verify-signature", "", -1)
 	trustee, err := b.readTrustee(ctx, req, prunedPath)
 	if err != nil {
 		return nil, err
@@ -387,4 +444,115 @@ func (b *backend) pathExportCreate(ctx context.Context, req *logical.Request, da
 			"passphrase": passphrase,
 		},
 	}, nil
+}
+
+func (b *backend) pathCreateJWT(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	subject := data.Get("subject").(string)
+	audience := data.Get("audience").(string)
+	expiry := data.Get("expiry").(string)
+	notBeforeTime := data.Get("not_before_time").(string)
+	claimsData := data.Get("claims").([]byte)
+	prunedPath := strings.Replace(req.Path, "/claim", "", -1)
+	trustee, err := b.readTrustee(ctx, req, prunedPath)
+	if err != nil {
+		return nil, err
+	}
+	var claims jwt.MapClaims
+	if err := json.Unmarshal(claimsData, &claims); err != nil {
+		return nil, err
+	}
+	claims["iss"] = trustee.Address
+	if audience != "" {
+		claims["aud"] = audience
+	}
+	if subject != "" {
+		claims["sub"] = subject
+	} else {
+		claims["sub"] = trustee.Address
+	}
+	if notBeforeTime != "" {
+		claims["nbf"] = notBeforeTime
+	} else {
+		claims["nbf"] = fmt.Sprintf("%d", time.Now().UTC().Unix())
+	}
+	timeUnix, err := strconv.ParseInt(claims["nbf"].(string), 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	timeStart := time.Unix(timeUnix, 0)
+	timeExpiry, err := time.ParseDuration(expiry)
+	if err != nil {
+		return nil, err
+	}
+	claims["exp"] = fmt.Sprintf("%d", timeStart.Add(timeExpiry).Unix())
+
+	key, err := b.getTrusteePrivateKey(prunedPath, *trustee)
+	if err != nil {
+		return nil, err
+	}
+	uniqueID, err := uuid.NewV4()
+	if err != nil {
+		return nil, err
+	}
+	hash := hashKeccak256(uniqueID.String())
+	signature, err := crypto.Sign(hash, key.PrivateKey)
+
+	alg := jwt.GetSigningMethod(JWTAlgorithm)
+	if alg == nil {
+		return nil, fmt.Errorf("Couldn't find signing method: %s", JWTAlgorithm)
+	}
+	claims["jti"] = uniqueID.String()
+	claims["eth"] = hexutil.Encode(signature[:])
+	// create a new JWT
+	token := jwt.NewWithClaims(alg, claims)
+	tokenOutput, err := token.SignedString(key)
+	if err != nil {
+		return nil, fmt.Errorf("Error signing token: %v", err)
+	}
+
+	defer zeroKey(key.PrivateKey)
+	return &logical.Response{
+		Data: map[string]interface{}{
+			"claim": tokenOutput,
+		},
+	}, nil
+}
+
+func (b *backend) pathVerifyClaim(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	rawToken := data.Get("claim").(string)
+	tokenWithoutWhitespace := regexp.MustCompile(`\s*$`).ReplaceAll([]byte(rawToken), []byte{})
+	token := string(tokenWithoutWhitespace)
+	var claims jwt.MapClaims
+	jwtToken, _, err := new(jwt.Parser).ParseUnverified(token, claims)
+	if err != nil {
+		return nil, err
+	}
+	unverifiedJwt := jwtToken.Claims.(jwt.MapClaims)
+	ethereumAddress := unverifiedJwt["iss"].(string)
+	jti := unverifiedJwt["jti"].(string)
+	signatureRaw := unverifiedJwt["eth"].(string)
+	hash := hashKeccak256(jti)
+	signature, err := hexutil.Decode(signatureRaw)
+
+	if err != nil {
+		return nil, err
+	}
+	pubkey, err := crypto.SigToPub(hash, signature)
+
+	if err != nil {
+		return nil, err
+	}
+	address := crypto.PubkeyToAddress(*pubkey)
+
+	if ethereumAddress == address.Hex() {
+		validateJwt, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
+			return pubkey, nil
+		})
+		claims := validateJwt.Claims.(jwt.MapClaims)
+		err = claims.Valid()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return nil, fmt.Errorf("Error verifying token")
 }

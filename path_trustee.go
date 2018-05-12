@@ -24,12 +24,12 @@ import (
 	"strings"
 	"time"
 
-	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/hashicorp/vault/logical"
 	"github.com/hashicorp/vault/logical/framework"
+	jwt "github.com/immutability-io/jwt-go"
 	"github.com/satori/go.uuid"
 	"github.com/sethvargo/go-diceware/diceware"
 )
@@ -228,6 +228,7 @@ Validate that this trustee made a claime.
 }
 
 func (b *backend) pathTrusteesRead(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	b.Logger().Info("pathTrusteesRead")
 	trustee, err := b.readTrustee(ctx, req, req.Path)
 	if err != nil {
 		return nil, err
@@ -245,6 +246,7 @@ func (b *backend) pathTrusteesRead(ctx context.Context, req *logical.Request, da
 }
 
 func (b *backend) pathTrusteesCreate(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	b.Logger().Info("pathTrusteesCreate")
 	chainID := data.Get("chain_id").(string)
 	whitelist := data.Get("whitelist").([]string)
 	blacklist := data.Get("blacklist").([]string)
@@ -293,6 +295,7 @@ func (b *backend) pathTrusteesCreate(ctx context.Context, req *logical.Request, 
 }
 
 func (b *backend) pathTrusteeUpdate(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	b.Logger().Info("pathTrusteeUpdate")
 	whitelist := data.Get("whitelist").([]string)
 	blacklist := data.Get("blacklist").([]string)
 	trustee, err := b.readTrustee(ctx, req, req.Path)
@@ -319,6 +322,7 @@ func (b *backend) pathTrusteeUpdate(ctx context.Context, req *logical.Request, d
 }
 
 func (b *backend) pathTrusteesDelete(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	b.Logger().Info("pathTrusteesDelete")
 	if err := req.Storage.Delete(ctx, req.Path); err != nil {
 		return nil, err
 	}
@@ -327,6 +331,7 @@ func (b *backend) pathTrusteesDelete(ctx context.Context, req *logical.Request, 
 }
 
 func (b *backend) pathTrusteesList(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	b.Logger().Info("pathTrusteesList")
 	vals, err := req.Storage.List(ctx, "trustees/")
 	if err != nil {
 		return nil, err
@@ -335,6 +340,7 @@ func (b *backend) pathTrusteesList(ctx context.Context, req *logical.Request, da
 }
 
 func (b *backend) pathSign(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	b.Logger().Info("pathSign")
 	var hash []byte
 	if data.Get("raw").(bool) {
 		input := data.Get("data").(string)
@@ -370,6 +376,7 @@ func (b *backend) pathSign(ctx context.Context, req *logical.Request, data *fram
 }
 
 func (b *backend) pathVerifySignature(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	b.Logger().Info("pathVerifySignature")
 	var hash []byte
 	if data.Get("raw").(bool) {
 		input := data.Get("data").(string)
@@ -409,6 +416,7 @@ func (b *backend) pathVerifySignature(ctx context.Context, req *logical.Request,
 }
 
 func (b *backend) pathExportCreate(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	b.Logger().Info("pathExportCreate")
 	directory := data.Get("path").(string)
 	prunedPath := strings.Replace(req.Path, "/export", "", -1)
 	trustee, err := b.readTrustee(ctx, req, prunedPath)
@@ -447,19 +455,24 @@ func (b *backend) pathExportCreate(ctx context.Context, req *logical.Request, da
 }
 
 func (b *backend) pathCreateJWT(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	b.Logger().Info("pathCreateJWT")
 	subject := data.Get("subject").(string)
 	audience := data.Get("audience").(string)
 	expiry := data.Get("expiry").(string)
 	notBeforeTime := data.Get("not_before_time").(string)
-	claimsData := data.Get("claims").([]byte)
+	claimsData := data.Get("claims").(string)
 	prunedPath := strings.Replace(req.Path, "/claim", "", -1)
 	trustee, err := b.readTrustee(ctx, req, prunedPath)
 	if err != nil {
 		return nil, err
 	}
 	var claims jwt.MapClaims
-	if err := json.Unmarshal(claimsData, &claims); err != nil {
-		return nil, err
+	if claimsData != "" {
+		if err := json.Unmarshal([]byte(claimsData), &claims); err != nil {
+			return nil, err
+		}
+	} else {
+		claims = make(jwt.MapClaims)
 	}
 	claims["iss"] = trustee.Address
 	if audience != "" {
@@ -505,7 +518,8 @@ func (b *backend) pathCreateJWT(ctx context.Context, req *logical.Request, data 
 	claims["eth"] = hexutil.Encode(signature[:])
 	// create a new JWT
 	token := jwt.NewWithClaims(alg, claims)
-	tokenOutput, err := token.SignedString(key)
+	b.Logger().Info(fmt.Sprintf("BANGER --> %+v", claims))
+	tokenOutput, err := token.SignedString(key.PrivateKey)
 	if err != nil {
 		return nil, fmt.Errorf("Error signing token: %v", err)
 	}
@@ -531,6 +545,7 @@ The JWT should contain:
 
 */
 func (b *backend) pathVerifyClaim(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	b.Logger().Info("pathVerifyClaim")
 	rawToken := data.Get("claim").(string)
 	tokenWithoutWhitespace := regexp.MustCompile(`\s*$`).ReplaceAll([]byte(rawToken), []byte{})
 	token := string(tokenWithoutWhitespace)

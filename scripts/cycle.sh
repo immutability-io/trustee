@@ -1,4 +1,4 @@
-vault secrets disable trustee
+vault secrets disable trust
 vault delete sys/plugins/catalog/trustee
 cd ..
 go build
@@ -7,4 +7,4 @@ export SHA256=$(shasum -a 256 "$HOME/etc/vault.d/vault_plugins/trustee" | cut -d
 vault write sys/plugins/catalog/trustee \
       sha_256="${SHA256}" \
       command="trustee --ca-cert=$HOME/etc/vault.d/root.crt --client-cert=$HOME/etc/vault.d/vault.crt --client-key=$HOME/etc/vault.d/vault.key"
-vault secrets enable -path=trustee -plugin-name=trustee plugin
+vault secrets enable -path=trust -plugin-name=trustee plugin

@@ -32,8 +32,8 @@ import (
 )
 
 const (
-	// JWTAlgorithm is for secp256
-	JWTAlgorithm string = "ES256"
+	// JWTAlgorithm is for secp256k1
+	JWTAlgorithm string = "ES256K"
 	// ProtocolKeystore JSON keystore URLs start with this
 	ProtocolKeystore string = "keystore://"
 	// MaxKeystoreSize is a heuristic to prevent reading stupid big files
@@ -56,17 +56,20 @@ func prettyPrint(v interface{}) string {
 }
 
 func (b *backend) writeTemporaryKeystoreFile(path string, filename string, data []byte) (string, error) {
+	b.Logger().Info("writeTemporaryKeystoreFile")
 	keystorePath := path + "/" + filename
 	err := ioutil.WriteFile(keystorePath, data, 0644)
 	return keystorePath, err
 }
 
 func (b *backend) createTemporaryKeystoreDirectory() (string, error) {
+	b.Logger().Info("createTemporaryKeystoreDirectory")
 	dir, err := ioutil.TempDir("", "keystore")
 	return dir, err
 }
 
 func (b *backend) removeTemporaryKeystore(path string) error {
+	b.Logger().Info("removeTemporaryKeystore")
 	return os.RemoveAll(path)
 }
 
@@ -90,6 +93,7 @@ func parseURL(url string) (accounts.URL, error) {
 }
 
 func (b *backend) rekeyJSONKeystore(keystorePath string, passphrase string, newPassphrase string) ([]byte, error) {
+	b.Logger().Info("rekeyJSONKeystore")
 	var key *keystore.Key
 	jsonKeystore, err := b.readJSONKeystore(keystorePath)
 	if err != nil {
@@ -105,6 +109,7 @@ func (b *backend) rekeyJSONKeystore(keystorePath string, passphrase string, newP
 }
 
 func (b *backend) readKeyFromJSONKeystore(keystorePath string, passphrase string) (*keystore.Key, error) {
+	b.Logger().Info("readKeyFromJSONKeystore")
 	var key *keystore.Key
 	jsonKeystore, err := b.readJSONKeystore(keystorePath)
 	if err != nil {
@@ -126,6 +131,7 @@ func zeroKey(k *ecdsa.PrivateKey) {
 }
 
 func (b *backend) importJSONKeystore(ctx context.Context, keystorePath string, passphrase string) (string, []byte, error) {
+	b.Logger().Info("importJSONKeystore")
 	var key *keystore.Key
 	jsonKeystore, err := b.readJSONKeystore(keystorePath)
 	if err != nil {
@@ -152,6 +158,7 @@ func pathExists(ctx context.Context, req *logical.Request, path string) (bool, e
 }
 
 func (b *backend) readJSONKeystore(keystorePath string) ([]byte, error) {
+	b.Logger().Info("readJSONKeystore")
 	var jsonKeystore []byte
 	file, err := os.Open(keystorePath)
 	defer file.Close()
@@ -173,6 +180,7 @@ func (b *backend) readJSONKeystore(keystorePath string) ([]byte, error) {
 }
 
 func (b *backend) getTrusteePrivateKey(path string, trustee Trustee) (*keystore.Key, error) {
+	b.Logger().Info("getTrusteePrivateKey")
 	tmpDir, err := b.createTemporaryKeystoreDirectory()
 	if err != nil {
 		return nil, err
@@ -191,11 +199,13 @@ func (b *backend) getTrusteePrivateKey(path string, trustee Trustee) (*keystore.
 }
 
 func (b *backend) exportKeystore(path string, trustee *Trustee) (string, error) {
+	b.Logger().Info("exportKeystore")
 	directory, err := b.writeTemporaryKeystoreFile(path, trustee.KeystoreName, trustee.JSONKeystore)
 	return directory, err
 }
 
 func (b *backend) readTrustee(ctx context.Context, req *logical.Request, path string) (*Trustee, error) {
+	b.Logger().Info("readTrustee")
 	entry, err := req.Storage.Get(ctx, path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find trustee at %s", path)
@@ -211,6 +221,7 @@ func (b *backend) readTrustee(ctx context.Context, req *logical.Request, path st
 }
 
 func (b *backend) contains(stringSlice []string, searchString string) bool {
+	b.Logger().Info("contains")
 	for _, value := range stringSlice {
 		if value == searchString {
 			return true

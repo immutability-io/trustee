@@ -51,14 +51,15 @@ So, in our modern digital landscape, identity can't be DNA. So, should an assert
 2. This key has a pair that everyone can know - we call this the public key;
 3. These 2 keys have special (nearly magical) mathematical properties that allow powerful kinds of assertions.
 
-The assertions intimated by #3 above include the ability to say: if IdentityX is the only actor with access to a private key, then IdentityX is the only one who is allowed to make a certain kind of assertion:
+The type of assertions alluded to by #3 above includes:
 
-**If I sign any statement with a private key, it can be proven incontrovertibly that I signed that statement**
+**If IdentityX is trusted to make a claim, it can be proven incontrovertibly by some other actor who has access to IdentityX's public key, that the claim is valid**
 
 #### The `0x` thingies represent identities
 
-So, without spending much more time on public key cryptography, the point to be made is:
+So, without spending much more time on public key cryptography, the points to be made are:
 
-##### If I know your address (the `0x` thingie) I can verify that you made a statement.
+- [x] If I know something's address (the `0x` thingie) I can verify that somthing made a statement.
+- [x] If I trust something (aka, the address... aka, the `0x` thingie) I trust certains statements.
 
 And, while we know private keys can be stolen (and thus be used to make fraudulent assertions) it is really the best we can do right now.

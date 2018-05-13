@@ -8,7 +8,7 @@ A Vault plugin that solves for trust in a decentralized way
 Imagine a land with many services: 
 
 * Within a single enterprise, there may be many internal microservices (some more than micro - but to call them "fat" would be bullying) 
-* Outside of the enterprise, there may be any number of services - remember the future (it's hard - it hasn't happened yet:) we have functions as a service everywhere
+* Outside of the enterprise, there may be any number of services - remember the future (it's hard to remember something that hasn't happened yet) we have functions as a service everywhere
 
 Now imagine an actor (not a Hollywood actor - though it could be a Hollywood actor, I am thinking of a participant in a system interaction.) This actor authenticates to an  identity providers, and this identity provider asserts that this actor is who he or she or it says it is. The identity provider does that by signing a JSON encoded data structure that contains all the things (claims) that the identity provider believes the actor is entitled to.
 

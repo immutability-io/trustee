@@ -53,9 +53,7 @@ So, in our modern digital landscape, identity can't be DNA. So, should an assert
 
 In other words: **If IdentityX is trusted to make a claim, it can be proven incontrovertibly by some other actor who has access to IdentityX's public key, that the claim is valid**
 
-#### Addresses (the `0x` thingies) represent identities
-
-So, without spending much more time on public key cryptography, the points to be made are:
+*Addresses (the `0x` thingies) represent identities*. So, without spending much more time on public key cryptography, the points to be made are:
 
 - [x] If I know something's address (the `0x` thingie) I can verify that something made a statement.
 - [x] Therefore, if I trust something (aka, the address... aka, the `0x` thingie) I trust certains statements.

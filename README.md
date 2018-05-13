@@ -41,7 +41,7 @@ Ok. That explanation isn't helping, is it? Let's try again.
 
 ### What is identity?
 
-Before we talk about those `0x thingies, we need to talk about identity. What is it about you that make you unique? That is, what asserts your identity? Is it your DNA? Your blood or saliva or hair is an assertion of your identity, of course; but, it is pretty easy for someone to get a copy of your DNA (the maid in the hotel room, the bartender at your favorite nightspot, your dog who has stolen your underwear, ...) And, it would be awkard for someone to gain access to your bank account because they had a hair brush you forgot at a hotel... (Or that damn dog with your underwear...) 
+Before we talk about those `0x` thingies, we need to talk about identity. What is it about you that make you unique? That is, what asserts your identity? Is it your DNA? Your blood or saliva or hair could be an assertion of your identity, of course; but, it is pretty easy for someone to get a copy of your DNA (the maid in the hotel room, the bartender at your favorite nightspot, your dog who has stolen your underwear, ...) And, it would be awkard for someone to gain access to your bank account because they had a hair brush you forgot at a hotel... (Or that damn dog with your underwear...) 
 
 Furthermore, what about things that have no DNA? Services, bots, lambdas, etc. These things have identities too - just not biological ones. Very often when we build systems, we need to know if a particular service makes an assertion.
 

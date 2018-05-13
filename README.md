@@ -45,7 +45,7 @@ Before we talk about those `0x` thingies, we need to talk about identity. What i
 
 Furthermore, what about things that have no DNA? Services, bots, lambdas, etc. These things have identities too - just not biological ones. Very often when we build systems, we need to know if a particular service makes an assertion.
 
-So, in or modern digital landscape, identity can't be DNA. So, should an assertion about your identity be something only you (whatever you are) know? Some dearly held secret? This sounds a bit more practical: care canbe taken to safeguard that secret, and, if one so chooses, one can have different secrets for different contexts. Dearly held secrets in the form of cryptographic keys are what many folks use for identity assertions. It works like this:
+So, in our modern digital landscape, identity can't be DNA. So, should an assertion about your identity be based on something only you (whatever you are) know? Some dearly held secret? This sounds a bit more practical: care can be taken to safeguard that secret, and, if one so chooses, one can have different secrets for different contexts. Dearly held secrets in the form of cryptographic keys are what many folks use for identity assertions. It works like this:
 
 1. IdentityX has a key (a secret) that only IdentityX can access - call this a private key;
 2. This key has a pair that everyone can know - we call this the public key;

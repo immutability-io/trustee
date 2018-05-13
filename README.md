@@ -29,7 +29,7 @@ This JWT might look like this:
 
 ### What the heck are these `0x` thingies?
 
-The first thing that you might notice about this JWT is that there are 3 values starting with `0x`. These are a special kind of identifier: I will call them addresses, because that is what they are called in the Ethereum ecosystem. Ethereum addresses are sequences bytes (20) which are derived from the public key portion of an ECDSA keypair. They are derived using this algorithm: `address=right(keccak256(public_key),20)`.
+The first thing that you might notice about this JWT is that there are 3 values starting with `0x`. These are a special kind of identifier: I will call them addresses, because that is what they are called in the Ethereum ecosystem. Ethereum addresses are sequences of bytes (20 of them) which are derived from the public key portion of an ECDSA keypair. They are derived using this algorithm: `address=right(keccak256(public_key),20)`.
 
 While that may seem fairly opaque, the important thing to know is:
 

@@ -518,17 +518,15 @@ func (b *backend) pathCreateJWT(ctx context.Context, req *logical.Request, data 
 	claims["eth"] = hexutil.Encode(signature[:])
 	// create a new JWT
 	token := jwt.NewWithClaims(alg, claims)
-	b.Logger().Info(fmt.Sprintf("BANGER --> %+v", claims))
 	tokenOutput, err := token.SignedString(key.PrivateKey)
 	if err != nil {
 		return nil, fmt.Errorf("Error signing token: %v", err)
 	}
 
 	defer zeroKey(key.PrivateKey)
+	claims["jwt"] = tokenOutput
 	return &logical.Response{
-		Data: map[string]interface{}{
-			"jwt": tokenOutput,
-		},
+		Data: claims,
 	}, nil
 }
 
@@ -549,13 +547,18 @@ func (b *backend) pathVerifyClaim(ctx context.Context, req *logical.Request, dat
 	rawToken := data.Get("claim").(string)
 	tokenWithoutWhitespace := regexp.MustCompile(`\s*$`).ReplaceAll([]byte(rawToken), []byte{})
 	token := string(tokenWithoutWhitespace)
-	var claims jwt.MapClaims
-	jwtToken, _, err := new(jwt.Parser).ParseUnverified(token, claims)
-	if err != nil {
-		return nil, err
+
+	jwtToken, _, err := new(jwt.Parser).ParseUnverified(token, jwt.MapClaims{})
+	if err != nil || jwtToken == nil {
+		b.Logger().Info(fmt.Sprintf("ERROR PARSE\n"))
+		return nil, fmt.Errorf("cannot parse token")
 	}
 	unverifiedJwt := jwtToken.Claims.(jwt.MapClaims)
+	if unverifiedJwt == nil {
+		return nil, fmt.Errorf("cannot get claims")
+	}
 	ethereumAddress := unverifiedJwt["iss"].(string)
+
 	jti := unverifiedJwt["jti"].(string)
 	signatureRaw := unverifiedJwt["eth"].(string)
 	hash := hashKeccak256(jti)

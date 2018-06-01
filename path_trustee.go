@@ -118,30 +118,6 @@ Writes a JSON keystore to a folder (e.g., /Users/immutability/.ethereum/keystore
 			},
 		},
 		&framework.Path{
-			Pattern:      "trustees/" + framework.GenericNameRegex("name") + "/sign",
-			HelpSynopsis: "Hash and sign data",
-			HelpDescription: `
-
-Hash and sign data using the trustee's private key.
-
-`,
-			Fields: map[string]*framework.FieldSchema{
-				"data": &framework.FieldSchema{
-					Type:        framework.TypeString,
-					Description: "The data to hash (keccak) and sign.",
-				},
-				"raw": &framework.FieldSchema{
-					Type:        framework.TypeBool,
-					Default:     false,
-					Description: "if true, data is expected to be raw hashed transaction data in hex encoding - won't hash prior to signing",
-				},
-			},
-			ExistenceCheck: b.pathExistenceCheck,
-			Callbacks: map[logical.Operation]framework.OperationFunc{
-				logical.CreateOperation: b.pathSign,
-			},
-		},
-		&framework.Path{
 			Pattern:      "trustees/" + framework.GenericNameRegex("name") + "/claim",
 			HelpSynopsis: "Create a JWT containing claims. Sign with trustees ECDSA private key.",
 			HelpDescription: `
@@ -178,35 +154,7 @@ Create a JWT containing claims. Sign with trustees ECDSA private key.
 			},
 		},
 		&framework.Path{
-			Pattern:      "trustees/" + framework.GenericNameRegex("name") + "/verify-signature",
-			HelpSynopsis: "Verify that this trustee signed something.",
-			HelpDescription: `
-
-Validate that this trustee signed some data.
-
-`,
-			Fields: map[string]*framework.FieldSchema{
-				"data": &framework.FieldSchema{
-					Type:        framework.TypeString,
-					Description: "The data to verify the signature of.",
-				},
-				"raw": &framework.FieldSchema{
-					Type:        framework.TypeBool,
-					Default:     false,
-					Description: "if true, data is expected to be raw hashed transaction data in hex encoding - won't hash prior to signing",
-				},
-				"signature": &framework.FieldSchema{
-					Type:        framework.TypeString,
-					Description: "The signature to verify",
-				},
-			},
-			ExistenceCheck: b.pathExistenceCheck,
-			Callbacks: map[logical.Operation]framework.OperationFunc{
-				logical.CreateOperation: b.pathVerifySignature,
-			},
-		},
-		&framework.Path{
-			Pattern:      "trustees/" + framework.GenericNameRegex("name") + "/verify-claim",
+			Pattern:      "verify",
 			HelpSynopsis: "Verify that this claim (JWT) is good.",
 			HelpDescription: `
 
@@ -339,82 +287,6 @@ func (b *backend) pathTrusteesList(ctx context.Context, req *logical.Request, da
 	return logical.ListResponse(vals), nil
 }
 
-func (b *backend) pathSign(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	b.Logger().Info("pathSign")
-	var hash []byte
-	if data.Get("raw").(bool) {
-		input := data.Get("data").(string)
-		var err error
-		hash, err = hexutil.Decode(input)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		hash = hashKeccak256(data.Get("data").(string))
-	}
-
-	prunedPath := strings.Replace(req.Path, "/sign", "", -1)
-	trustee, err := b.readTrustee(ctx, req, prunedPath)
-	if err != nil {
-		return nil, err
-	}
-	key, err := b.getTrusteePrivateKey(prunedPath, *trustee)
-	if err != nil {
-		return nil, err
-	}
-	defer zeroKey(key.PrivateKey)
-	signature, err := crypto.Sign(hash, key.PrivateKey)
-
-	if err != nil {
-		return nil, err
-	}
-	return &logical.Response{
-		Data: map[string]interface{}{
-			"signature": hexutil.Encode(signature[:]),
-		},
-	}, nil
-}
-
-func (b *backend) pathVerifySignature(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	b.Logger().Info("pathVerifySignature")
-	var hash []byte
-	if data.Get("raw").(bool) {
-		input := data.Get("data").(string)
-		var err error
-		hash, err = hexutil.Decode(input)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		hash = hashKeccak256(data.Get("data").(string))
-	}
-	signatureRaw := data.Get("signature").(string)
-
-	prunedPath := strings.Replace(req.Path, "/verify-signature", "", -1)
-	trustee, err := b.readTrustee(ctx, req, prunedPath)
-	if err != nil {
-		return nil, err
-	}
-	signature, err := hexutil.Decode(signatureRaw)
-
-	if err != nil {
-		return nil, err
-	}
-	pubkey, err := crypto.SigToPub(hash, signature)
-
-	if err != nil {
-		return nil, err
-	}
-	address := crypto.PubkeyToAddress(*pubkey)
-
-	verified := trustee.Address == address.Hex()
-	return &logical.Response{
-		Data: map[string]interface{}{
-			"verified": verified,
-		},
-	}, nil
-}
-
 func (b *backend) pathExportCreate(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	b.Logger().Info("pathExportCreate")
 	directory := data.Get("path").(string)
@@ -530,18 +402,6 @@ func (b *backend) pathCreateJWT(ctx context.Context, req *logical.Request, data 
 	}, nil
 }
 
-/* The goal here is to take the incoming JWT - which is a *special* JWT - and use it to self-validate.
-The JWT should contain:
-
-	jwt["iss"] == ETH address of issuer
-	jwt["jti"] == nonce that was hashed and signed
-	jwt["eth"] == signature by issuer of hashed jti
-
-	We derive public key, PubKey, from the signature and the hash(jwt["jti"]). Then we derive the ETH address, EthAddr, from
-	PubKey. If jwt["iss"] == EthAddr, then we know that should attempt to validate the JWT with PubKey. If that works,
-	we know that EthAddr sent the claim. If we trust EthAddr, then we accept the claim.
-
-*/
 func (b *backend) pathVerifyClaim(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	b.Logger().Info("pathVerifyClaim")
 	rawToken := data.Get("claim").(string)

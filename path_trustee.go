@@ -176,7 +176,6 @@ Validate that this trustee made a claime.
 }
 
 func (b *backend) pathTrusteesRead(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	b.Logger().Info("pathTrusteesRead")
 	trustee, err := b.readTrustee(ctx, req, req.Path)
 	if err != nil {
 		return nil, err
@@ -194,7 +193,6 @@ func (b *backend) pathTrusteesRead(ctx context.Context, req *logical.Request, da
 }
 
 func (b *backend) pathTrusteesCreate(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	b.Logger().Info("pathTrusteesCreate")
 	chainID := data.Get("chain_id").(string)
 	whitelist := data.Get("whitelist").([]string)
 	blacklist := data.Get("blacklist").([]string)
@@ -243,7 +241,6 @@ func (b *backend) pathTrusteesCreate(ctx context.Context, req *logical.Request, 
 }
 
 func (b *backend) pathTrusteeUpdate(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	b.Logger().Info("pathTrusteeUpdate")
 	whitelist := data.Get("whitelist").([]string)
 	blacklist := data.Get("blacklist").([]string)
 	trustee, err := b.readTrustee(ctx, req, req.Path)
@@ -270,7 +267,6 @@ func (b *backend) pathTrusteeUpdate(ctx context.Context, req *logical.Request, d
 }
 
 func (b *backend) pathTrusteesDelete(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	b.Logger().Info("pathTrusteesDelete")
 	if err := req.Storage.Delete(ctx, req.Path); err != nil {
 		return nil, err
 	}
@@ -279,7 +275,6 @@ func (b *backend) pathTrusteesDelete(ctx context.Context, req *logical.Request, 
 }
 
 func (b *backend) pathTrusteesList(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	b.Logger().Info("pathTrusteesList")
 	vals, err := req.Storage.List(ctx, "trustees/")
 	if err != nil {
 		return nil, err
@@ -288,7 +283,6 @@ func (b *backend) pathTrusteesList(ctx context.Context, req *logical.Request, da
 }
 
 func (b *backend) pathExportCreate(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	b.Logger().Info("pathExportCreate")
 	directory := data.Get("path").(string)
 	prunedPath := strings.Replace(req.Path, "/export", "", -1)
 	trustee, err := b.readTrustee(ctx, req, prunedPath)
@@ -327,7 +321,6 @@ func (b *backend) pathExportCreate(ctx context.Context, req *logical.Request, da
 }
 
 func (b *backend) pathCreateJWT(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	b.Logger().Info("pathCreateJWT")
 	subject := data.Get("subject").(string)
 	audience := data.Get("audience").(string)
 	expiry := data.Get("expiry").(string)
@@ -394,7 +387,7 @@ func (b *backend) pathCreateJWT(ctx context.Context, req *logical.Request, data 
 	if err != nil {
 		return nil, fmt.Errorf("Error signing token: %v", err)
 	}
-
+	test, err := b.verifyClaim(ctx, tokenOutput)
 	defer zeroKey(key.PrivateKey)
 	claims["jwt"] = tokenOutput
 	return &logical.Response{
@@ -403,14 +396,22 @@ func (b *backend) pathCreateJWT(ctx context.Context, req *logical.Request, data 
 }
 
 func (b *backend) pathVerifyClaim(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	b.Logger().Info("pathVerifyClaim")
 	rawToken := data.Get("claim").(string)
+	claims, err := b.verifyClaim(ctx, rawToken)
+	if err == nil {
+		return &logical.Response{
+			Data: claims,
+		}, nil
+	}
+	return nil, fmt.Errorf("Error verifying token")
+}
+
+func (b *backend) verifyClaim(ctx context.Context, rawToken string) (jwt.MapClaims, error) {
 	tokenWithoutWhitespace := regexp.MustCompile(`\s*$`).ReplaceAll([]byte(rawToken), []byte{})
 	token := string(tokenWithoutWhitespace)
 
 	jwtToken, _, err := new(jwt.Parser).ParseUnverified(token, jwt.MapClaims{})
 	if err != nil || jwtToken == nil {
-		b.Logger().Info(fmt.Sprintf("ERROR PARSE\n"))
 		return nil, fmt.Errorf("cannot parse token")
 	}
 	unverifiedJwt := jwtToken.Claims.(jwt.MapClaims)
@@ -439,16 +440,14 @@ func (b *backend) pathVerifyClaim(ctx context.Context, req *logical.Request, dat
 			return pubkey, nil
 		})
 		if err != nil {
-			return nil, fmt.Errorf("signature not verified")
+			return nil, fmt.Errorf(err.Error())
 		}
 		claims := validateJwt.Claims.(jwt.MapClaims)
 		err = claims.Valid()
 		if err != nil {
 			return nil, err
 		}
-		return &logical.Response{
-			Data: claims,
-		}, nil
+		return claims, nil
 	}
 	return nil, fmt.Errorf("Error verifying token")
 }

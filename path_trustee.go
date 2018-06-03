@@ -24,12 +24,12 @@ import (
 	"strings"
 	"time"
 
+	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/hashicorp/vault/logical"
 	"github.com/hashicorp/vault/logical/framework"
-	jwt "github.com/immutability-io/jwt-go"
 	"github.com/satori/go.uuid"
 	"github.com/sethvargo/go-diceware/diceware"
 )
@@ -387,7 +387,6 @@ func (b *backend) pathCreateJWT(ctx context.Context, req *logical.Request, data 
 	if err != nil {
 		return nil, fmt.Errorf("Error signing token: %v", err)
 	}
-	test, err := b.verifyClaim(ctx, tokenOutput)
 	defer zeroKey(key.PrivateKey)
 	claims["jwt"] = tokenOutput
 	return &logical.Response{

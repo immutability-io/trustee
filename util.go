@@ -35,7 +35,7 @@ import (
 
 const (
 	// JWTAlgorithm is for secp256k1
-	JWTAlgorithm string = "ES256K"
+	JWTAlgorithm string = "ES256"
 	// ProtocolKeystore JSON keystore URLs start with this
 	ProtocolKeystore string = "keystore://"
 	// MaxKeystoreSize is a heuristic to prevent reading stupid big files

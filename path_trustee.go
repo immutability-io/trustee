@@ -438,6 +438,9 @@ func (b *backend) pathVerifyClaim(ctx context.Context, req *logical.Request, dat
 		validateJwt, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
 			return pubkey, nil
 		})
+		if err != nil {
+			return nil, fmt.Errorf("signature not verified")
+		}
 		claims := validateJwt.Claims.(jwt.MapClaims)
 		err = claims.Valid()
 		if err != nil {

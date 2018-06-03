@@ -49,4 +49,34 @@ The above means that the recipient can be sure that the sender (the possessor of
 
 If we enforce transport security, using TLSv3 for instance, we reduce the risk of hijack. We can also add additional information to the sender's payload to reduce the potential for hijack - we can enforce short TTLs for these messages such that the message that the sender sends is only valid for a short period of time. In order to do that, we build upon another widely used mechanism - the bearer token - in the form of JWTs. 
 
+## The Vault Trustee Plugin
+
+The Vault Trustee plugin shares some code with the [Vault Ethereum plugin](https://github.com/immutability-io/vault-ethereum) - but the purpose of the Trustee plugin is quite different than that of the Ethereum plugin. (At some point, I will create a shared toolkit that both leverage.) The Vault Trustee plugin is intended to be used to generate JWT tokens that can be used for authentication and authorization. It is designed to work hand-in-hand with the [Vault JWT-Auth plugin](https://github.com/immutability-io/jwt-auth) to deliver a delegated authentication mechanism for modern serverless and microservice ecosystems. That said, this plugin could be used in many other use cases. I will describe the API for the plugin here and refer to the external documentation for the delegated authentication use case.
+
+### Overview
+
+At its essence, this plugin allows an authenticated caller to make assertions using the standard JWT format: the authenticated caller generates a JWT that contains any number of assertions (called `claims`). The JWT contains the Ethereum address of the caller as the `issuer` of the token. The caller then would transmit the JWT to another party. This other party (the recipient) can verify that the signature is valid - using the issuer - and if the recipient **trusts** this address, then the recipient honors the claims.
+
+For example, imagine an actor (not a Hollywood actor - though it could be a Hollywood actor, I am thinking of a participant in a system interaction.) This actor asserts that he/she/it is entitled to certain claims by signing a JSON encoded data structure that contains all the things (claims) that the the actor thinks they are entitled to. This JWT might look like this:
+
+```json
+
+{
+  "exp": "1526159771",
+  "iss": "0xc2c24827F9d72a294B143B4E1d0Ab5e111361DF3",
+  "jti": "34b40d89-8443-4b67-9843-6e9b8ab44e50",
+  "nbf": "1526156171",
+  "aud": "0x940b157c34E3594033B69c27FeE2325A00e72C5f",
+  "sub": "0xc2c24827F9d72a294B143B4E1d0Ab5e111361DF3",
+  "usage": ["knight_rider","baywatch_babes"]
+}
+```
+
+The actor then sends this JWT to another agency - e.g., a car rental agency. This agency already **knows** and **trusts** an identity known by the address `0xc2c24827F9d72a294B143B4E1d0Ab5e111361DF3`. This agency has the ability to honor claims made on a particular car known as `knight_rider`. The agency receives the JWT, verifies it and then allows `usage` of `knight_rider`.
+
+### Trust Must be Pre-Established 
+
+As indicated by the above use case, the trust by the car agency of `0xc2c24827F9d72a294B143B4E1d0Ab5e111361DF3` was established before the JWT was transmitted. In systems like this trust must be established beforehand. How this trust is established is discussed [elsewhere](https://github.com/immutability-io/jwt-auth) but since we are using standard mechanisms for verification of claims, trust can be pre-established in many ways. The Trustee plugin is a mechanism to make trustworthy claims; but, it is not an authentication/authorization mechanism.
+
+
 

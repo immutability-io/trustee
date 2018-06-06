@@ -162,7 +162,7 @@ Validate that this trustee made a claime.
 
 `,
 			Fields: map[string]*framework.FieldSchema{
-				"claim": &framework.FieldSchema{
+				"token": &framework.FieldSchema{
 					Type:        framework.TypeString,
 					Description: "The JWT to verify.",
 				},
@@ -395,7 +395,7 @@ func (b *backend) pathCreateJWT(ctx context.Context, req *logical.Request, data 
 }
 
 func (b *backend) pathVerifyClaim(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	rawToken := data.Get("claim").(string)
+	rawToken := data.Get("token").(string)
 	claims, err := b.verifyClaim(ctx, rawToken)
 	if err == nil {
 		return &logical.Response{

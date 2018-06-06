@@ -76,7 +76,9 @@ The actor then sends this JWT to another agency - e.g., a car rental agency. Thi
 
 ### Trust Must be Pre-Established 
 
-As indicated by the above use case, the trust by the car agency of `0xc2c24827F9d72a294B143B4E1d0Ab5e111361DF3` was established before the JWT was transmitted. In systems like this trust must be established beforehand. How this trust is established is discussed [elsewhere](https://github.com/immutability-io/jwt-auth) but since we are using standard mechanisms for verification of claims, trust can be pre-established in many ways. The Trustee plugin is a mechanism to make trustworthy claims; but, it is not an authentication/authorization mechanism.
+Duh, right? As indicated by the above use case, the trust by the car agency of `0xc2c24827F9d72a294B143B4E1d0Ab5e111361DF3` was established before the JWT was transmitted. In systems like this trust must be established beforehand. How this trust is established is discussed [elsewhere](https://github.com/immutability-io/jwt-auth) but since we are using standard mechanisms for verification of claims, trust can be pre-established in many ways. The Trustee plugin is a mechanism to make trustworthy claims; but, it is not an authentication/authorization mechanism.
 
+## API
 
+The API is [here](./API.md)
 

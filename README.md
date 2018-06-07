@@ -57,7 +57,7 @@ The Vault Trustee plugin shares some code with the [Vault Ethereum plugin](https
 
 At its essence, this plugin allows an authenticated caller to make assertions using the standard JWT format: the authenticated caller generates a JWT that contains any number of assertions (called `claims`). The JWT contains the Ethereum address of the caller as the `issuer` of the token. The caller then would transmit the JWT to another party. This other party (the recipient) can verify that the signature is valid - using the issuer - and if the recipient **trusts** this address, then the recipient honors the claims.
 
-![Trustee](./docs/trustee.png?raw=true "The Typical Trustee Flow")
+![Trustee](./doc/trustee.png?raw=true "The Typical Trustee Flow")
 
 
 For example, imagine an actor (not a Hollywood actor - though it could be a Hollywood actor, I am thinking of a participant in a system interaction.) This actor asserts that he/she/it is entitled to certain claims by signing a JSON encoded data structure that contains all the things (claims) that the the actor thinks they are entitled to. This JWT might look like this:

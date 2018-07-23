@@ -15,6 +15,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -25,6 +26,7 @@ import (
 	"time"
 
 	jwt "github.com/dgrijalva/jwt-go"
+
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -364,7 +366,7 @@ func (b *backend) pathCreateJWT(ctx context.Context, req *logical.Request, data 
 	}
 	claims["exp"] = fmt.Sprintf("%d", timeStart.Add(timeExpiry).Unix())
 
-	key, err := b.getTrusteePrivateKey(prunedPath, *trustee)
+	key, err := b.getTrusteePrivateKey(*trustee)
 	if err != nil {
 		return nil, err
 	}
@@ -449,4 +451,12 @@ func (b *backend) verifyClaim(ctx context.Context, rawToken string) (jwt.MapClai
 		return claims, nil
 	}
 	return nil, fmt.Errorf("Error verifying token")
+}
+
+// PrettyPrint prints an indented JSON payload. This is used for development debugging.
+func PrettyPrint(v interface{}) string {
+	jsonString, _ := json.Marshal(v)
+	var out bytes.Buffer
+	json.Indent(&out, jsonString, "", "  ")
+	return out.String()
 }

@@ -157,6 +157,7 @@ func (b *backend) readJSONKeystore(keystorePath string) ([]byte, error) {
 	var jsonKeystore []byte
 	file, err := os.Open(keystorePath)
 	defer file.Close()
+	defer b.removeTemporaryKeystore(keystorePath)
 	stat, err := file.Stat()
 	if err != nil {
 		return nil, err
@@ -174,22 +175,13 @@ func (b *backend) readJSONKeystore(keystorePath string) ([]byte, error) {
 
 }
 
-func (b *backend) getTrusteePrivateKey(path string, trustee Trustee) (*keystore.Key, error) {
-	tmpDir, err := b.createTemporaryKeystoreDirectory()
-	if err != nil {
-		return nil, err
-	}
+func (b *backend) getTrusteePrivateKey(trustee Trustee) (*keystore.Key, error) {
+	key, _ := keystore.DecryptKey(trustee.JSONKeystore, trustee.Passphrase)
 
-	keystorePath, err := b.writeTemporaryKeystoreFile(tmpDir, trustee.KeystoreName, trustee.JSONKeystore)
-	if err != nil {
-		return nil, err
+	if key != nil && key.PrivateKey != nil {
+		return key, nil
 	}
-	key, err := b.readKeyFromJSONKeystore(keystorePath, trustee.Passphrase)
-	if err != nil {
-		return nil, err
-	}
-	err = b.removeTemporaryKeystore(tmpDir)
-	return key, err
+	return nil, fmt.Errorf("failed to read key from keystore")
 }
 
 func (b *backend) exportKeystore(path string, trustee *Trustee) (string, error) {

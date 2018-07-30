@@ -67,6 +67,9 @@ func Backend() *backend {
 				"names/*",
 				"verify",
 			},
+			SealWrapStorage: []string{
+				"trustees/",
+			},
 		},
 		Secrets:     []*framework.Secret{},
 		BackendType: logical.TypeLogical,

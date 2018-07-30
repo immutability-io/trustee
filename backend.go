@@ -55,12 +55,21 @@ func Backend() *backend {
 	b.Backend = &framework.Backend{
 		Help: "",
 		Paths: framework.PathAppend(
+			configPaths(&b),
+			lookupPaths(&b),
+			verifyPaths(&b),
 			importPaths(&b),
 			trusteesPaths(&b),
 		),
-		PathsSpecial: &logical.Paths{},
-		Secrets:      []*framework.Secret{},
-		BackendType:  logical.TypeLogical,
+		PathsSpecial: &logical.Paths{
+			Unauthenticated: []string{
+				"addresses/*",
+				"names/*",
+				"verify",
+			},
+		},
+		Secrets:     []*framework.Secret{},
+		BackendType: logical.TypeLogical,
 	}
 	return &b
 }

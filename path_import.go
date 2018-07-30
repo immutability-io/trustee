@@ -43,11 +43,6 @@ Reads a JSON keystore, decrypts it and stores the passphrase.
 					Type:        framework.TypeString,
 					Description: "Passphrase used to encrypt private key - will not be returned.",
 				},
-				"chain_id": &framework.FieldSchema{
-					Type:        framework.TypeString,
-					Description: "The Ethereum network that is being used.",
-					Default:     "4", // Rinkeby
-				},
 			},
 			ExistenceCheck: b.pathExistenceCheck,
 			Callbacks: map[logical.Operation]framework.OperationFunc{
@@ -63,7 +58,9 @@ func (b *backend) pathImportExistenceCheck(ctx context.Context, req *logical.Req
 }
 
 func (b *backend) pathImportCreate(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	chainID := data.Get("chain_id").(string)
+	if validConnection, err := b.validIPConstraints(ctx, req); !validConnection {
+		return nil, err
+	}
 	trusteePath := strings.Replace(req.Path, RequestPathImport, RequestPathTrustees, -1)
 	exists, err := pathExists(ctx, req, trusteePath)
 	if !exists || err != nil {
@@ -75,7 +72,6 @@ func (b *backend) pathImportCreate(ctx context.Context, req *logical.Request, da
 		}
 		filename := filepath.Base(keystorePath)
 		trusteeJSON := &Trustee{Address: address,
-			ChainID:      chainID,
 			Passphrase:   passphrase,
 			KeystoreName: filename,
 			JSONKeystore: jsonKeystore}

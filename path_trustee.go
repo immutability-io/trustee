@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -30,26 +29,30 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/hashicorp/errwrap"
+	"github.com/hashicorp/vault/helper/cidrutil"
 	"github.com/hashicorp/vault/logical"
 	"github.com/hashicorp/vault/logical/framework"
 	"github.com/satori/go.uuid"
 	"github.com/sethvargo/go-diceware/diceware"
 )
 
-const (
-	// VaultNetwork is a chain_id used to ensure compatibility with Ethereum
-	VaultNetwork string = "1977"
-)
-
 // Trustee is a trusted entity in vault. A Trustee has an address (Ethereum-compatible)
 type Trustee struct {
-	Address      string   `json:"address"`
-	Passphrase   string   `json:"passphrase"`
-	KeystoreName string   `json:"keystore_name"`
-	ChainID      string   `json:"chain_id"`
-	Whitelist    []string `json:"whitelist"`
-	Blacklist    []string `json:"blacklist"`
-	JSONKeystore []byte   `json:"json_keystore"`
+	Address      string `json:"address"`
+	Passphrase   string `json:"passphrase"`
+	KeystoreName string `json:"keystore_name"`
+	JSONKeystore []byte `json:"json_keystore"`
+}
+
+// TrusteeName stores the name of the trustee to allow reverse lookup by address
+type TrusteeName struct {
+	Name string `json:"name"`
+}
+
+// TrusteeAddress stores the name of the trustee to allow reverse lookup by address
+type TrusteeAddress struct {
+	Address string `json:"address"`
 }
 
 func trusteesPaths(b *backend) []*framework.Path {
@@ -78,26 +81,47 @@ the new passphrase.
 
 `,
 			Fields: map[string]*framework.FieldSchema{
-				"chain_id": &framework.FieldSchema{
-					Type:        framework.TypeString,
-					Description: "The Ethereum network that is being used - for compatibility.",
-					Default:     VaultNetwork,
-				},
-				"whitelist": &framework.FieldSchema{
-					Type:        framework.TypeCommaStringSlice,
-					Description: "The list of trustees that this trustee trusts.",
-				},
-				"blacklist": &framework.FieldSchema{
-					Type:        framework.TypeCommaStringSlice,
-					Description: "The list of trustees that this trustee doesn't trust.",
-				},
+				"name": &framework.FieldSchema{Type: framework.TypeString},
 			},
 			ExistenceCheck: b.pathExistenceCheck,
 			Callbacks: map[logical.Operation]framework.OperationFunc{
 				logical.ReadOperation:   b.pathTrusteesRead,
 				logical.CreateOperation: b.pathTrusteesCreate,
-				logical.UpdateOperation: b.pathTrusteeUpdate,
 				logical.DeleteOperation: b.pathTrusteesDelete,
+			},
+		},
+		&framework.Path{
+			Pattern: "trustees/?",
+			Callbacks: map[logical.Operation]framework.OperationFunc{
+				logical.ListOperation: b.pathTrusteesList,
+			},
+			HelpSynopsis: "List all the trustees at a path",
+			HelpDescription: `
+			All the trustees will be listed.
+			`,
+		},
+		&framework.Path{
+			Pattern:      "addresses/" + framework.GenericNameRegex("address"),
+			HelpSynopsis: "Lookup a trustee's name by address.",
+			HelpDescription: `
+
+			Lookup a trustee's name by address.
+`,
+			ExistenceCheck: b.pathExistenceCheck,
+			Callbacks: map[logical.Operation]framework.OperationFunc{
+				logical.ReadOperation: b.pathAddressesRead,
+			},
+		},
+		&framework.Path{
+			Pattern:      "names/" + framework.GenericNameRegex("name"),
+			HelpSynopsis: "Lookup a trustee's address by name.",
+			HelpDescription: `
+
+			Lookup a trustee's address by name.
+`,
+			ExistenceCheck: b.pathExistenceCheck,
+			Callbacks: map[logical.Operation]framework.OperationFunc{
+				logical.ReadOperation: b.pathNamesRead,
 			},
 		},
 		&framework.Path{
@@ -155,25 +179,6 @@ Create a JWT containing claims. Sign with trustees ECDSA private key.
 				logical.CreateOperation: b.pathCreateJWT,
 			},
 		},
-		&framework.Path{
-			Pattern:      "verify",
-			HelpSynopsis: "Verify that this claim (JWT) is good.",
-			HelpDescription: `
-
-Validate that this trustee made a claime.
-
-`,
-			Fields: map[string]*framework.FieldSchema{
-				"token": &framework.FieldSchema{
-					Type:        framework.TypeString,
-					Description: "The JWT to verify.",
-				},
-			},
-			ExistenceCheck: b.pathExistenceCheck,
-			Callbacks: map[logical.Operation]framework.OperationFunc{
-				logical.CreateOperation: b.pathVerifyClaim,
-			},
-		},
 	}
 }
 
@@ -183,21 +188,25 @@ func (b *backend) pathTrusteesRead(ctx context.Context, req *logical.Request, da
 		return nil, err
 	}
 
+	if trustee == nil {
+		return nil, nil
+	}
+
 	// Return the secret
 	return &logical.Response{
 		Data: map[string]interface{}{
-			"address":   trustee.Address,
-			"chain_id":  trustee.ChainID,
-			"whitelist": trustee.Whitelist,
-			"blacklist": trustee.Blacklist,
+			"address": trustee.Address,
 		},
 	}, nil
 }
 
 func (b *backend) pathTrusteesCreate(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	chainID := data.Get("chain_id").(string)
-	whitelist := data.Get("whitelist").([]string)
-	blacklist := data.Get("blacklist").([]string)
+	trusteeName := strings.Replace(req.Path, "trustees/", "", -1)
+
+	if validConnection, err := b.validIPConstraints(ctx, req); !validConnection {
+		return nil, err
+	}
+
 	list, _ := diceware.Generate(PassphraseWords)
 	passphrase := strings.Join(list, PassphraseSeparator)
 	tmpDir, err := b.createTemporaryKeystoreDirectory()
@@ -215,14 +224,32 @@ func (b *backend) pathTrusteesCreate(ctx context.Context, req *logical.Request, 
 	if err != nil {
 		return nil, err
 	}
+	trusteeNameJSON := &TrusteeName{Name: trusteeName}
+	trusteeAddressJSON := &TrusteeAddress{Address: trustee.Address.Hex()}
 	trusteeJSON := &Trustee{Address: trustee.Address.Hex(),
-		ChainID:      chainID,
 		Passphrase:   passphrase,
-		Whitelist:    dedup(whitelist),
-		Blacklist:    dedup(blacklist),
 		KeystoreName: filepath.Base(trustee.URL.String()),
 		JSONKeystore: jsonKeystore}
+
+	pathTrusteeName := fmt.Sprintf("addresses/%s", trustee.Address.Hex())
+	pathTrusteeAddress := fmt.Sprintf("names/%s", trusteeName)
+	lookupNameEntry, err := logical.StorageEntryJSON(pathTrusteeName, trusteeNameJSON)
+	if err != nil {
+		return nil, err
+	}
+	lookupAddressEntry, err := logical.StorageEntryJSON(pathTrusteeAddress, trusteeAddressJSON)
+	if err != nil {
+		return nil, err
+	}
 	entry, err := logical.StorageEntryJSON(req.Path, trusteeJSON)
+	if err != nil {
+		return nil, err
+	}
+	err = req.Storage.Put(ctx, lookupNameEntry)
+	if err != nil {
+		return nil, err
+	}
+	err = req.Storage.Put(ctx, lookupAddressEntry)
 	if err != nil {
 		return nil, err
 	}
@@ -234,45 +261,32 @@ func (b *backend) pathTrusteesCreate(ctx context.Context, req *logical.Request, 
 	b.removeTemporaryKeystore(tmpDir)
 	return &logical.Response{
 		Data: map[string]interface{}{
-			"address":   trusteeJSON.Address,
-			"chain_id":  trusteeJSON.ChainID,
-			"whitelist": trusteeJSON.Whitelist,
-			"blacklist": trusteeJSON.Blacklist,
-		},
-	}, nil
-}
-
-func (b *backend) pathTrusteeUpdate(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	whitelist := data.Get("whitelist").([]string)
-	blacklist := data.Get("blacklist").([]string)
-	trustee, err := b.readTrustee(ctx, req, req.Path)
-	if err != nil {
-		return nil, err
-	}
-	trustee.Whitelist = dedup(whitelist)
-	trustee.Blacklist = dedup(blacklist)
-
-	entry, _ := logical.StorageEntryJSON(req.Path, trustee)
-
-	err = req.Storage.Put(ctx, entry)
-	if err != nil {
-		return nil, err
-	}
-	return &logical.Response{
-		Data: map[string]interface{}{
-			"address":   trustee.Address,
-			"chain_id":  trustee.ChainID,
-			"whitelist": trustee.Whitelist,
-			"blacklist": trustee.Blacklist,
+			"address": trusteeJSON.Address,
 		},
 	}, nil
 }
 
 func (b *backend) pathTrusteesDelete(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	if validConnection, err := b.validIPConstraints(ctx, req); !validConnection {
+		return nil, err
+	}
+	trusteeName := strings.Replace(req.Path, "trustees/", "", -1)
+	trustee, err := b.readTrustee(ctx, req, req.Path)
+	if err != nil {
+		return nil, err
+	}
 	if err := req.Storage.Delete(ctx, req.Path); err != nil {
 		return nil, err
 	}
-
+	// Remove lookup value
+	pathTrusteeName := fmt.Sprintf("addresses/%s", trustee.Address)
+	pathTrusteeAddress := fmt.Sprintf("names/%s", trusteeName)
+	if err := req.Storage.Delete(ctx, pathTrusteeName); err != nil {
+		return nil, err
+	}
+	if err := req.Storage.Delete(ctx, pathTrusteeAddress); err != nil {
+		return nil, err
+	}
 	return nil, nil
 }
 
@@ -285,6 +299,9 @@ func (b *backend) pathTrusteesList(ctx context.Context, req *logical.Request, da
 }
 
 func (b *backend) pathExportCreate(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	if validConnection, err := b.validIPConstraints(ctx, req); !validConnection {
+		return nil, err
+	}
 	directory := data.Get("path").(string)
 	prunedPath := strings.Replace(req.Path, "/export", "", -1)
 	trustee, err := b.readTrustee(ctx, req, prunedPath)
@@ -396,61 +413,28 @@ func (b *backend) pathCreateJWT(ctx context.Context, req *logical.Request, data 
 	}, nil
 }
 
-func (b *backend) pathVerifyClaim(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	rawToken := data.Get("token").(string)
-	claims, err := b.verifyClaim(ctx, rawToken)
-	if err == nil {
-		return &logical.Response{
-			Data: claims,
-		}, nil
-	}
-	return nil, fmt.Errorf("Error verifying token")
-}
-
-func (b *backend) verifyClaim(ctx context.Context, rawToken string) (jwt.MapClaims, error) {
-	tokenWithoutWhitespace := regexp.MustCompile(`\s*$`).ReplaceAll([]byte(rawToken), []byte{})
-	token := string(tokenWithoutWhitespace)
-
-	jwtToken, _, err := new(jwt.Parser).ParseUnverified(token, jwt.MapClaims{})
-	if err != nil || jwtToken == nil {
-		return nil, fmt.Errorf("cannot parse token")
-	}
-	unverifiedJwt := jwtToken.Claims.(jwt.MapClaims)
-	if unverifiedJwt == nil {
-		return nil, fmt.Errorf("cannot get claims")
-	}
-	ethereumAddress := unverifiedJwt["iss"].(string)
-
-	jti := unverifiedJwt["jti"].(string)
-	signatureRaw := unverifiedJwt["eth"].(string)
-	hash := hashKeccak256(jti)
-	signature, err := hexutil.Decode(signatureRaw)
-
+func (b *backend) validIPConstraints(ctx context.Context, req *logical.Request) (bool, error) {
+	config, err := b.Config(ctx, req.Storage)
 	if err != nil {
-		return nil, err
+		return false, err
 	}
-	pubkey, err := crypto.SigToPub(hash, signature)
-
-	if err != nil {
-		return nil, err
+	if config == nil {
+		return true, err
 	}
-	address := crypto.PubkeyToAddress(*pubkey)
-
-	if ethereumAddress == address.Hex() {
-		validateJwt, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
-			return pubkey, nil
-		})
-		if err != nil {
-			return nil, fmt.Errorf(err.Error())
+	if len(config.BoundCIDRList) != 0 {
+		if req.Connection == nil || req.Connection.RemoteAddr == "" {
+			return false, fmt.Errorf("failed to get connection information")
 		}
-		claims := validateJwt.Claims.(jwt.MapClaims)
-		err = claims.Valid()
+
+		belongs, err := cidrutil.IPBelongsToCIDRBlocksSlice(req.Connection.RemoteAddr, config.BoundCIDRList)
 		if err != nil {
-			return nil, err
+			return false, errwrap.Wrapf("failed to verify the CIDR restrictions set on the role: {{err}}", err)
 		}
-		return claims, nil
+		if !belongs {
+			return false, fmt.Errorf("source address %q unauthorized through CIDR restrictions on the role", req.Connection.RemoteAddr)
+		}
 	}
-	return nil, fmt.Errorf("Error verifying token")
+	return true, nil
 }
 
 // PrettyPrint prints an indented JSON payload. This is used for development debugging.

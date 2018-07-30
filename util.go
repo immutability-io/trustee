@@ -192,9 +192,51 @@ func (b *backend) exportKeystore(path string, trustee *Trustee) (string, error) 
 func (b *backend) readTrustee(ctx context.Context, req *logical.Request, path string) (*Trustee, error) {
 	entry, err := req.Storage.Get(ctx, path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to find trustee at %s", path)
+		return nil, err
 	}
+	if entry == nil {
+		return nil, nil
+	}
+
 	var trustee Trustee
+	err = entry.DecodeJSON(&trustee)
+
+	if entry == nil {
+		return nil, fmt.Errorf("failed to deserialize trustee at %s", path)
+	}
+
+	return &trustee, nil
+}
+
+func (b *backend) readAddress(ctx context.Context, req *logical.Request, path string) (*TrusteeName, error) {
+	entry, err := req.Storage.Get(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	if entry == nil {
+		return nil, nil
+	}
+
+	var trustee TrusteeName
+	err = entry.DecodeJSON(&trustee)
+
+	if entry == nil {
+		return nil, fmt.Errorf("failed to deserialize trustee at %s", path)
+	}
+
+	return &trustee, nil
+}
+
+func (b *backend) readName(ctx context.Context, req *logical.Request, path string) (*TrusteeAddress, error) {
+	entry, err := req.Storage.Get(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	if entry == nil {
+		return nil, nil
+	}
+
+	var trustee TrusteeAddress
 	err = entry.DecodeJSON(&trustee)
 
 	if entry == nil {

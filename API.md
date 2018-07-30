@@ -84,13 +84,7 @@ The example below shows output for a read of `/trust/trustees/test`.
   "renewable": false,
   "lease_duration": 0,
   "data": {
-    "address": "0x3943FF61FF803316cF02938b5b0b3Ba3bbE183e4",
-    "blacklist": null,
-    "chain_id": "4",
-    "whitelist": [
-      "0xD9E025bFb6ef48919D9C1a49834b7BA859714cD8",
-      "0x58e9043a873EdBa4c5C865Bf1c65dcB3473f7572"
-    ]
+    "address": "0x3943FF61FF803316cF02938b5b0b3Ba3bbE183e4"
   },
   "wrap_info": null,
   "warnings": null,
@@ -110,25 +104,12 @@ This endpoint will create a trustee at a path.
 #### Parameters
 
 * `name` (`string: <required>`) - Specifies the name of the trustee to create. This is specified as part of the URL.
-* `chain_id` (`string: <optional> default:"4"`) - Specifies the Ethereum network. Defaults to Rinkeby.
-* `whitelist` (`string array: <optional>`) - Comma delimited list of allowed trustees.
-* `blacklist` (`string array: <optional>`) - Comma delimited list of disallowed trustees. Note: `blacklist` overrides `whitelist`.
-
-#### Sample Payload
-
-```
-{
-  "chain_id": "1977",
-  "whitelist": ["0xD9E025bFb6ef48919D9C1a49834b7BA859714cD8","0x58e9043a873EdBa4c5C865Bf1c65dcB3473f7572"]
-}
-```
 
 #### Sample Request
 
 ```sh
 $ curl -s --cacert ~/etc/vault.d/root.crt --header "X-Vault-Token: $VAULT_TOKEN" \
     --request POST \
-    --data @payload.json \
     https://localhost:8200/v1/trust/trustees/test3 | jq .
 ```
 
@@ -143,13 +124,7 @@ The example below shows output for the successful creation of `/trust/trustees/t
   "renewable": false,
   "lease_duration": 0,
   "data": {
-    "address": "0xb7633a740Df793CbF7530b251c89aecA4F4df748",
-    "blacklist": null,
-    "chain_id": "1977",
-    "whitelist": [
-      "0xD9E025bFb6ef48919D9C1a49834b7BA859714cD8",
-      "0x58e9043a873EdBa4c5C865Bf1c65dcB3473f7572"
-    ]
+    "address": "0xb7633a740Df793CbF7530b251c89aecA4F4df748"
   },
   "wrap_info": null,
   "warnings": null,
@@ -157,63 +132,6 @@ The example below shows output for the successful creation of `/trust/trustees/t
 }
 ```
 
-### UPDATE TRUSTEE
-
-This endpoint will re-encrypt the keystore for an Ethereum trustee with a new passphrase.
-
-| Method  | Path | Produces |
-| ------------- | ------------- | ------------- |
-| `PUT`  | `:mount-path/trustees/:name`  | `200 application/json` |
-
-#### Parameters
-
-* `name` (`string: <required>`) - Specifies the name of the trustee to update. This is specified as part of the URL.
-* `chain_id` (`string: <optional> default:"4"`) - Specifies the Ethereum network. Defaults to Rinkeby.
-* `whitelist` (`string array: <optional>`) - Comma delimited list of allowed trustees.
-* `blacklist` (`string array: <optional>`) - Comma delimited list of disallowed trustees. Note: `blacklist` overrides `whitelist`.
-
-#### Sample Payload
-
-```
-{
-  "chain_id": "1977",
-  "whitelist": ["0xD9E025bFb6ef48919D9C1a49834b7BA859714cD8","0x58e9043a873EdBa4c5C865Bf1c65dcB3473f7572"]
-}
-```
-
-#### Sample Request
-
-```sh
-$ curl -s --cacert ~/etc/vault.d/root.crt --header "X-Vault-Token: $VAULT_TOKEN" \
-    --request PUT \
-    --data @payload.json \
-    https://localhost:8200/v1/trust/trustees/test3 | jq .
-```
-
-#### Sample Response
-
-The example below shows output for the successful re-encryption of the keystore for `/trust/trustees/test3`.
-
-```
-{
-  "request_id": "c4d7bae9-269a-d8b9-0171-c6284524c2b5",
-  "lease_id": "",
-  "renewable": false,
-  "lease_duration": 0,
-  "data": {
-    "address": "0xb7633a740Df793CbF7530b251c89aecA4F4df748",
-    "blacklist": null,
-    "chain_id": "1977",
-    "whitelist": [
-      "0xD9E025bFb6ef48919D9C1a49834b7BA859714cD8",
-      "0x58e9043a873EdBa4c5C865Bf1c65dcB3473f7572"
-    ]
-  },
-  "wrap_info": null,
-  "warnings": null,
-  "auth": null
-}
-```
 
 ### DELETE TRUSTEE
 

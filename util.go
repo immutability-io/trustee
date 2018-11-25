@@ -91,57 +91,21 @@ func parseURL(url string) (accounts.URL, error) {
 	}, nil
 }
 
-func (b *backend) rekeyJSONKeystore(keystorePath string, passphrase string, newPassphrase string) ([]byte, error) {
+func (b *backend) importJSONKeystore(ctx context.Context, keystorePath string, passphrase string) (*ecdsa.PrivateKey, error) {
 	var key *keystore.Key
 	jsonKeystore, err := b.readJSONKeystore(keystorePath)
 	if err != nil {
 		return nil, err
-	}
-	key, _ = keystore.DecryptKey(jsonKeystore, passphrase)
-
-	if key != nil && key.PrivateKey != nil {
-		defer zeroKey(key.PrivateKey)
-	}
-	jsonBytes, err := keystore.EncryptKey(key, newPassphrase, keystore.StandardScryptN, keystore.StandardScryptP)
-	return jsonBytes, err
-}
-
-func (b *backend) readKeyFromJSONKeystore(keystorePath string, passphrase string) (*keystore.Key, error) {
-	var key *keystore.Key
-	jsonKeystore, err := b.readJSONKeystore(keystorePath)
-	if err != nil {
-		return nil, err
-	}
-	key, _ = keystore.DecryptKey(jsonKeystore, passphrase)
-
-	if key != nil && key.PrivateKey != nil {
-		return key, nil
-	}
-	return nil, fmt.Errorf("failed to read key from keystore")
-}
-
-func zeroKey(k *ecdsa.PrivateKey) {
-	b := k.D.Bits()
-	for i := range b {
-		b[i] = 0
-	}
-}
-
-func (b *backend) importJSONKeystore(ctx context.Context, keystorePath string, passphrase string) (string, []byte, error) {
-	var key *keystore.Key
-	jsonKeystore, err := b.readJSONKeystore(keystorePath)
-	if err != nil {
-		return "", nil, err
 	}
 	key, err = keystore.DecryptKey(jsonKeystore, passphrase)
 	if err != nil {
-		return "", nil, err
+		return nil, err
+	}
+	if key == nil {
+		return nil, fmt.Errorf("failed to decrypt key")
 	}
 
-	if key != nil && key.PrivateKey != nil {
-		defer zeroKey(key.PrivateKey)
-	}
-	return key.Address.Hex(), jsonKeystore, err
+	return key.PrivateKey, err
 }
 
 func pathExists(ctx context.Context, req *logical.Request, path string) (bool, error) {
@@ -175,21 +139,8 @@ func (b *backend) readJSONKeystore(keystorePath string) ([]byte, error) {
 
 }
 
-func (b *backend) getTrusteePrivateKey(trustee Trustee) (*keystore.Key, error) {
-	key, _ := keystore.DecryptKey(trustee.JSONKeystore, trustee.Passphrase)
-
-	if key != nil && key.PrivateKey != nil {
-		return key, nil
-	}
-	return nil, fmt.Errorf("failed to read key from keystore")
-}
-
-func (b *backend) exportKeystore(path string, trustee *Trustee) (string, error) {
-	directory, err := b.writeTemporaryKeystoreFile(path, trustee.KeystoreName, trustee.JSONKeystore)
-	return directory, err
-}
-
-func (b *backend) readTrustee(ctx context.Context, req *logical.Request, path string) (*Trustee, error) {
+func (b *backend) readTrustee(ctx context.Context, req *logical.Request, name string) (*Trustee, error) {
+	path := fmt.Sprintf("trustees/%s", name)
 	entry, err := req.Storage.Get(ctx, path)
 	if err != nil {
 		return nil, err
@@ -199,44 +150,6 @@ func (b *backend) readTrustee(ctx context.Context, req *logical.Request, path st
 	}
 
 	var trustee Trustee
-	err = entry.DecodeJSON(&trustee)
-
-	if entry == nil {
-		return nil, fmt.Errorf("failed to deserialize trustee at %s", path)
-	}
-
-	return &trustee, nil
-}
-
-func (b *backend) readAddress(ctx context.Context, req *logical.Request, path string) (*TrusteeName, error) {
-	entry, err := req.Storage.Get(ctx, path)
-	if err != nil {
-		return nil, err
-	}
-	if entry == nil {
-		return nil, nil
-	}
-
-	var trustee TrusteeName
-	err = entry.DecodeJSON(&trustee)
-
-	if entry == nil {
-		return nil, fmt.Errorf("failed to deserialize trustee at %s", path)
-	}
-
-	return &trustee, nil
-}
-
-func (b *backend) readName(ctx context.Context, req *logical.Request, path string) (*TrusteeAddress, error) {
-	entry, err := req.Storage.Get(ctx, path)
-	if err != nil {
-		return nil, err
-	}
-	if entry == nil {
-		return nil, nil
-	}
-
-	var trustee TrusteeAddress
 	err = entry.DecodeJSON(&trustee)
 
 	if entry == nil {
@@ -293,4 +206,12 @@ func encodePublicKey(publicKey *ecdsa.PublicKey) string {
 	pemEncodedPub := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: x509EncodedPub})
 
 	return string(pemEncodedPub)
+}
+
+// ZeroKey removes the key from memory
+func ZeroKey(k *ecdsa.PrivateKey) {
+	b := k.D.Bits()
+	for i := range b {
+		b[i] = 0
+	}
 }

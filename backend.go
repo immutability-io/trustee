@@ -56,7 +56,8 @@ func Backend() *backend {
 		Help: "",
 		Paths: framework.PathAppend(
 			configPaths(&b),
-			lookupPaths(&b),
+			namesPaths(&b),
+			addressesPaths(&b),
 			verifyPaths(&b),
 			importPaths(&b),
 			trusteesPaths(&b),

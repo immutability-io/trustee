@@ -16,10 +16,13 @@ package main
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"fmt"
-	"path/filepath"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/hashicorp/vault/logical"
 	"github.com/hashicorp/vault/logical/framework"
 )
@@ -35,6 +38,7 @@ Reads a JSON keystore, decrypts it and stores the passphrase.
 
 `,
 			Fields: map[string]*framework.FieldSchema{
+				"name": &framework.FieldSchema{Type: framework.TypeString},
 				"path": &framework.FieldSchema{
 					Type:        framework.TypeString,
 					Description: "Path to the keystore file - not the parent directory.",
@@ -58,25 +62,46 @@ func (b *backend) pathImportExistenceCheck(ctx context.Context, req *logical.Req
 }
 
 func (b *backend) pathImportCreate(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	if validConnection, err := b.validIPConstraints(ctx, req); !validConnection {
+	_, err := b.configured(ctx, req)
+	if err != nil {
 		return nil, err
 	}
-	trusteePath := strings.Replace(req.Path, RequestPathImport, RequestPathTrustees, -1)
-	exists, err := pathExists(ctx, req, trusteePath)
-	if !exists || err != nil {
+	name := data.Get("name").(string)
+	trustee, err := b.readTrustee(ctx, req, name)
+	if err != nil {
+		return nil, fmt.Errorf("Error reading trustee")
+	}
+	if trustee == nil {
 		keystorePath := data.Get("path").(string)
 		passphrase := data.Get("passphrase").(string)
-		address, jsonKeystore, err := b.importJSONKeystore(ctx, keystorePath, passphrase)
+		privateKey, err := b.importJSONKeystore(ctx, keystorePath, passphrase)
 		if err != nil {
 			return nil, err
 		}
-		filename := filepath.Base(keystorePath)
-		trusteeJSON := &Trustee{Address: address,
-			Passphrase:   passphrase,
-			KeystoreName: filename,
-			JSONKeystore: jsonKeystore}
+		defer ZeroKey(privateKey)
+		privateKeyBytes := crypto.FromECDSA(privateKey)
+		privateKeyString := hexutil.Encode(privateKeyBytes)[2:]
 
-		entry, err := logical.StorageEntryJSON(trusteePath, trusteeJSON)
+		publicKey := privateKey.Public()
+		publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+		if !ok {
+			return nil, fmt.Errorf("error casting public key to ECDSA")
+		}
+
+		publicKeyBytes := crypto.FromECDSAPub(publicKeyECDSA)
+		publicKeyString := hexutil.Encode(publicKeyBytes)[4:]
+
+		hash := sha3.NewKeccak256()
+		hash.Write(publicKeyBytes[1:])
+		address := hexutil.Encode(hash.Sum(nil)[12:])
+
+		trusteeJSON := &Trustee{
+			Address:    address,
+			PrivateKey: privateKeyString,
+			PublicKey:  publicKeyString,
+		}
+		path := fmt.Sprintf("trustees/%s", name)
+		entry, err := logical.StorageEntryJSON(path, trusteeJSON)
 		if err != nil {
 			return nil, err
 		}
@@ -85,12 +110,14 @@ func (b *backend) pathImportCreate(ctx context.Context, req *logical.Request, da
 		if err != nil {
 			return nil, err
 		}
+		b.crossReference(ctx, req, name, trusteeJSON.Address)
 		return &logical.Response{
 			Data: map[string]interface{}{
-				"address": address,
+				"address": trusteeJSON.Address,
 			},
 		}, nil
 	}
-	return nil, fmt.Errorf("this path %s exists. You can't import on top of it", trusteePath)
+
+	return nil, fmt.Errorf("account %s exists", name)
 
 }

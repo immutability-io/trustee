@@ -131,16 +131,6 @@ the new passphrase.
 			},
 		},
 		&framework.Path{
-			Pattern: "trustees/?",
-			Callbacks: map[logical.Operation]framework.OperationFunc{
-				logical.ListOperation: b.pathTrusteesList,
-			},
-			HelpSynopsis: "List all the trustees at a path",
-			HelpDescription: `
-			All the trustees will be listed.
-			`,
-		},
-		&framework.Path{
 			Pattern:      "addresses/" + framework.GenericNameRegex("address"),
 			HelpSynopsis: "Lookup a trustee's name by address.",
 			HelpDescription: `
@@ -242,6 +232,11 @@ Create a JWT containing claims. Sign with trustees ECDSA private key.
 					Type:        framework.TypeString,
 					Description: "The Audience for which these claims are intended. Identified by `aud` in the JWT.",
 				},
+				"encrypt": &framework.FieldSchema{
+					Type:        framework.TypeBool,
+					Default:     false,
+					Description: "If `true` the claims will be encrypted using the `audience` public key.",
+				},
 				"expiry": &framework.FieldSchema{
 					Type:        framework.TypeString,
 					Default:     "1h",
@@ -269,7 +264,8 @@ func (b *backend) pathTrusteesRead(ctx context.Context, req *logical.Request, da
 	if err != nil {
 		return nil, err
 	}
-	trustee, err := b.readTrustee(ctx, req, req.Path)
+	name := data.Get("name").(string)
+	trustee, err := b.readTrustee(ctx, req, name)
 	if err != nil {
 		return nil, err
 	}
@@ -340,8 +336,8 @@ func (b *backend) pathTrusteesDelete(ctx context.Context, req *logical.Request, 
 	if err != nil {
 		return nil, err
 	}
-	trusteeName := strings.Replace(req.Path, "trustees/", "", -1)
-	trustee, err := b.readTrustee(ctx, req, req.Path)
+	name := data.Get("name").(string)
+	trustee, err := b.readTrustee(ctx, req, name)
 	if err != nil {
 		return nil, err
 	}
@@ -350,7 +346,7 @@ func (b *backend) pathTrusteesDelete(ctx context.Context, req *logical.Request, 
 	}
 	// Remove lookup value
 	pathTrusteeName := fmt.Sprintf("addresses/%s", trustee.Address)
-	pathTrusteeAddress := fmt.Sprintf("names/%s", trusteeName)
+	pathTrusteeAddress := fmt.Sprintf("names/%s", name)
 	if err := req.Storage.Delete(ctx, pathTrusteeName); err != nil {
 		return nil, err
 	}
@@ -421,8 +417,10 @@ func (b *backend) pathCreateJWT(ctx context.Context, req *logical.Request, data 
 	if err != nil {
 		return nil, err
 	}
+	var audience *Audience
 	subject := data.Get("subject").(string)
-	audience := data.Get("audience").(string)
+	audienceName := data.Get("audience").(string)
+	encrypt := data.Get("encrypt").(bool)
 	expiry := data.Get("expiry").(string)
 	notBeforeTime := data.Get("not_before_time").(string)
 	claimsData := data.Get("claims").(string)
@@ -434,9 +432,21 @@ func (b *backend) pathCreateJWT(ctx context.Context, req *logical.Request, data 
 	} else {
 		claims = make(jwt.MapClaims)
 	}
+	if encrypt {
+		audience, err = b.readAudience(ctx, req, audienceName)
+		if audience == nil || err != nil {
+			return nil, fmt.Errorf("audience not found - cannot encrypt")
+		}
+		claims, err = b.encryptClaims(ctx, audience, claims)
+		if err != nil {
+			return nil, err
+		}
+	}
 	claims["iss"] = trustee.Address
-	if audience != "" {
-		claims["aud"] = audience
+	if audience != nil {
+		claims["aud"] = audience.Address
+	} else if audienceName != "" {
+		claims["aud"] = audienceName
 	}
 	if subject != "" {
 		claims["sub"] = subject

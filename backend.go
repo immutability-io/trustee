@@ -61,6 +61,7 @@ func Backend() *backend {
 			verifyPaths(&b),
 			importPaths(&b),
 			trusteesPaths(&b),
+			audiencesPaths(&b),
 		),
 		PathsSpecial: &logical.Paths{
 			Unauthenticated: []string{

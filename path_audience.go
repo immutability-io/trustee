@@ -93,7 +93,7 @@ func (b *backend) pathAudiencesCreate(ctx context.Context, req *logical.Request,
 		return nil, err
 	}
 	publicKeyBytes := crypto.FromECDSAPub(pubkey)
-	publicKey := hexutil.Encode(publicKeyBytes)
+	publicKey := hex.EncodeToString(publicKeyBytes)
 	address := crypto.PubkeyToAddress(*pubkey)
 
 	audienceJSON := &Audience{

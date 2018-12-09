@@ -18,9 +18,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
-	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -192,20 +190,6 @@ func hashKeccak256(data string) []byte {
 	msg := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(input), input)
 	hash := crypto.Keccak256([]byte(msg))
 	return hash
-}
-
-func encodePrivateKey(privateKey *ecdsa.PrivateKey) string {
-	x509Encoded, _ := x509.MarshalECPrivateKey(privateKey)
-	pemEncoded := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: x509Encoded})
-
-	return string(pemEncoded)
-}
-
-func encodePublicKey(publicKey *ecdsa.PublicKey) string {
-	x509EncodedPub, _ := x509.MarshalPKIXPublicKey(publicKey)
-	pemEncodedPub := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: x509EncodedPub})
-
-	return string(pemEncodedPub)
 }
 
 // ZeroKey removes the key from memory

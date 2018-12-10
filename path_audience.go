@@ -112,7 +112,8 @@ func (b *backend) pathAudiencesCreate(ctx context.Context, req *logical.Request,
 
 	return &logical.Response{
 		Data: map[string]interface{}{
-			"address": audienceJSON.Address,
+			"address":    audienceJSON.Address,
+			"public_key": audienceJSON.PublicKey,
 		},
 	}, nil
 }
@@ -135,7 +136,8 @@ func (b *backend) pathAudiencesRead(ctx context.Context, req *logical.Request, d
 	// Return the secret
 	return &logical.Response{
 		Data: map[string]interface{}{
-			"address": audience.Address,
+			"address":    audience.Address,
+			"public_key": audience.PublicKey,
 		},
 	}, nil
 }

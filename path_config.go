@@ -19,16 +19,16 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/errwrap"
-	"github.com/hashicorp/vault/helper/cidrutil"
-	"github.com/hashicorp/vault/logical"
-	"github.com/hashicorp/vault/logical/framework"
+	"github.com/hashicorp/vault/sdk/framework"
+	"github.com/hashicorp/vault/sdk/helper/cidrutil"
+	"github.com/hashicorp/vault/sdk/logical"
 )
 
 type config struct {
 	BoundCIDRList []string `json:"bound_cidr_list_list" structs:"bound_cidr_list" mapstructure:"bound_cidr_list"`
 }
 
-func configPaths(b *backend) []*framework.Path {
+func configPaths(b *PluginBackend) []*framework.Path {
 	return []*framework.Path{
 		&framework.Path{
 			Pattern: "config",
@@ -52,7 +52,7 @@ IP addresses which can perform the login operation.`,
 	}
 }
 
-func (b *backend) pathWriteConfig(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *PluginBackend) pathWriteConfig(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	var boundCIDRList []string
 	if boundCIDRListRaw, ok := data.GetOk("bound_cidr_list"); ok {
 		boundCIDRList = boundCIDRListRaw.([]string)
@@ -77,7 +77,7 @@ func (b *backend) pathWriteConfig(ctx context.Context, req *logical.Request, dat
 	}, nil
 }
 
-func (b *backend) pathReadConfig(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *PluginBackend) pathReadConfig(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	configBundle, err := b.readConfig(ctx, req.Storage)
 	if err != nil {
 		return nil, err
@@ -96,7 +96,7 @@ func (b *backend) pathReadConfig(ctx context.Context, req *logical.Request, data
 }
 
 // Config returns the configuration for this backend.
-func (b *backend) readConfig(ctx context.Context, s logical.Storage) (*config, error) {
+func (b *PluginBackend) readConfig(ctx context.Context, s logical.Storage) (*config, error) {
 	entry, err := s.Get(ctx, "config")
 	if err != nil {
 		return nil, err
@@ -116,7 +116,7 @@ func (b *backend) readConfig(ctx context.Context, s logical.Storage) (*config, e
 	return &result, nil
 }
 
-func (b *backend) configured(ctx context.Context, req *logical.Request) (*config, error) {
+func (b *PluginBackend) configured(ctx context.Context, req *logical.Request) (*config, error) {
 	config, err := b.readConfig(ctx, req.Storage)
 	if err != nil {
 		return nil, err
@@ -128,7 +128,7 @@ func (b *backend) configured(ctx context.Context, req *logical.Request) (*config
 	return config, nil
 }
 
-func (b *backend) validIPConstraints(config *config, req *logical.Request) (bool, error) {
+func (b *PluginBackend) validIPConstraints(config *config, req *logical.Request) (bool, error) {
 	if len(config.BoundCIDRList) != 0 {
 		if req.Connection == nil || req.Connection.RemoteAddr == "" {
 			return false, fmt.Errorf("failed to get connection information")

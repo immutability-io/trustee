@@ -18,8 +18,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/hashicorp/vault/logical"
-	"github.com/hashicorp/vault/logical/framework"
+	"github.com/hashicorp/vault/sdk/framework"
+	"github.com/hashicorp/vault/sdk/logical"
 )
 
 // AccountAddress stores the name of the account to allow reverse lookup by address
@@ -27,7 +27,7 @@ type AccountAddress struct {
 	Address string `json:"address"`
 }
 
-func addressesPaths(b *backend) []*framework.Path {
+func addressesPaths(b *PluginBackend) []*framework.Path {
 	return []*framework.Path{
 		&framework.Path{
 			Pattern: "addresses/?",
@@ -80,7 +80,7 @@ func addressesPaths(b *backend) []*framework.Path {
 	}
 }
 
-func (b *backend) pathAddressesRead(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *PluginBackend) pathAddressesRead(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	_, err := b.configured(ctx, req)
 	if err != nil {
 		return nil, err
@@ -104,7 +104,7 @@ func (b *backend) pathAddressesRead(ctx context.Context, req *logical.Request, d
 	}, nil
 }
 
-func (b *backend) pathAddressesList(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *PluginBackend) pathAddressesList(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	_, err := b.configured(ctx, req)
 	if err != nil {
 		return nil, err
@@ -117,7 +117,7 @@ func (b *backend) pathAddressesList(ctx context.Context, req *logical.Request, d
 	return logical.ListResponse(vals), nil
 }
 
-func (b *backend) readAddress(ctx context.Context, req *logical.Request, address string) (*AccountNames, error) {
+func (b *PluginBackend) readAddress(ctx context.Context, req *logical.Request, address string) (*AccountNames, error) {
 	path := fmt.Sprintf("addresses/%s", address)
 	entry, err := req.Storage.Get(ctx, path)
 	if err != nil {
@@ -136,7 +136,7 @@ func (b *backend) readAddress(ctx context.Context, req *logical.Request, address
 	return &accountNames, nil
 }
 
-func (b *backend) pathAddressesVerify(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *PluginBackend) pathAddressesVerify(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	_, err := b.configured(ctx, req)
 	if err != nil {
 		return nil, err
@@ -158,7 +158,7 @@ func (b *backend) pathAddressesVerify(ctx context.Context, req *logical.Request,
 	return b.verifySignature(ctx, req, data, account.Names[0])
 }
 
-func (b *backend) crossReference(ctx context.Context, req *logical.Request, name, address string) error {
+func (b *PluginBackend) crossReference(ctx context.Context, req *logical.Request, name, address string) error {
 	accountAddress := &AccountAddress{Address: address}
 	accountNames, err := b.readAddress(ctx, req, address)
 
@@ -191,7 +191,7 @@ func (b *backend) crossReference(ctx context.Context, req *logical.Request, name
 	return nil
 }
 
-func (b *backend) removeCrossReference(ctx context.Context, req *logical.Request, name, address string) error {
+func (b *PluginBackend) removeCrossReference(ctx context.Context, req *logical.Request, name, address string) error {
 	pathAccountAddress := fmt.Sprintf("addresses/%s", address)
 	pathAccountName := fmt.Sprintf("names/%s", name)
 

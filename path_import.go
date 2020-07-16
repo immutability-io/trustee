@@ -22,12 +22,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
-	"github.com/hashicorp/vault/logical"
-	"github.com/hashicorp/vault/logical/framework"
+	"github.com/hashicorp/vault/sdk/framework"
+	"github.com/hashicorp/vault/sdk/logical"
+	"golang.org/x/crypto/sha3"
 )
 
-func importPaths(b *backend) []*framework.Path {
+func importPaths(b *PluginBackend) []*framework.Path {
 	return []*framework.Path{
 		&framework.Path{
 			Pattern:      "import/" + framework.GenericNameRegex("name"),
@@ -56,12 +56,12 @@ Reads a JSON keystore, decrypts it and stores the passphrase.
 	}
 }
 
-func (b *backend) pathImportExistenceCheck(ctx context.Context, req *logical.Request, data *framework.FieldData) (bool, error) {
+func (b *PluginBackend) pathImportExistenceCheck(ctx context.Context, req *logical.Request, data *framework.FieldData) (bool, error) {
 	trusteePath := strings.Replace(req.Path, RequestPathImport, RequestPathTrustees, -1)
 	return pathExists(ctx, req, trusteePath)
 }
 
-func (b *backend) pathImportCreate(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *PluginBackend) pathImportCreate(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	_, err := b.configured(ctx, req)
 	if err != nil {
 		return nil, err
@@ -91,7 +91,7 @@ func (b *backend) pathImportCreate(ctx context.Context, req *logical.Request, da
 		publicKeyBytes := crypto.FromECDSAPub(publicKeyECDSA)
 		publicKeyString := hexutil.Encode(publicKeyBytes)[4:]
 
-		hash := sha3.NewKeccak256()
+		hash := sha3.NewLegacyKeccak256()
 		hash.Write(publicKeyBytes[1:])
 		address := hexutil.Encode(hash.Sum(nil)[12:])
 

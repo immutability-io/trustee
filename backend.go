@@ -18,19 +18,16 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/hashicorp/vault/logical"
-	"github.com/hashicorp/vault/logical/framework"
+	"github.com/hashicorp/vault/sdk/framework"
+	"github.com/hashicorp/vault/sdk/logical"
 )
 
-// New returns a new backend as an interface. This func
-// is only necessary for builtin backend plugins.
-func New() (interface{}, error) {
-	return Backend(), nil
-}
-
-// Factory returns a new backend as logical.Backend.
+// Factory returns the backend
 func Factory(ctx context.Context, conf *logical.BackendConfig) (logical.Backend, error) {
-	b := Backend()
+	b, err := Backend(conf)
+	if err != nil {
+		return nil, err
+	}
 	if err := b.Setup(ctx, conf); err != nil {
 		return nil, err
 	}
@@ -40,9 +37,12 @@ func Factory(ctx context.Context, conf *logical.BackendConfig) (logical.Backend,
 // FactoryType returns the factory
 func FactoryType(backendType logical.BackendType) logical.Factory {
 	return func(ctx context.Context, conf *logical.BackendConfig) (logical.Backend, error) {
-		b := Backend()
+		b, err := Backend(conf)
+		if err != nil {
+			return nil, err
+		}
 		b.BackendType = backendType
-		if err := b.Setup(ctx, conf); err != nil {
+		if err = b.Setup(ctx, conf); err != nil {
 			return nil, err
 		}
 		return b, nil
@@ -50,8 +50,8 @@ func FactoryType(backendType logical.BackendType) logical.Factory {
 }
 
 // Backend returns the backend
-func Backend() *backend {
-	var b backend
+func Backend(conf *logical.BackendConfig) (*PluginBackend, error) {
+	var b PluginBackend
 	b.Backend = &framework.Backend{
 		Help: "",
 		Paths: framework.PathAppend(
@@ -76,14 +76,15 @@ func Backend() *backend {
 		Secrets:     []*framework.Secret{},
 		BackendType: logical.TypeLogical,
 	}
-	return &b
+	return &b, nil
 }
 
-type backend struct {
+// PluginBackend implements the Backend for this plugin
+type PluginBackend struct {
 	*framework.Backend
 }
 
-func (b *backend) pathExistenceCheck(ctx context.Context, req *logical.Request, data *framework.FieldData) (bool, error) {
+func (b *PluginBackend) pathExistenceCheck(ctx context.Context, req *logical.Request, data *framework.FieldData) (bool, error) {
 	out, err := req.Storage.Get(ctx, req.Path)
 	if err != nil {
 		return false, fmt.Errorf("existence check failed: %v", err)

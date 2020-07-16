@@ -41,11 +41,11 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
-	"github.com/hashicorp/vault/logical"
-	"github.com/hashicorp/vault/logical/framework"
+	"github.com/hashicorp/vault/sdk/framework"
+	"github.com/hashicorp/vault/sdk/logical"
 	"github.com/pborman/uuid"
 	"github.com/sethvargo/go-diceware/diceware"
+	"golang.org/x/crypto/sha3"
 )
 
 // Trustee is a trusted entity in vault. A Trustee has an address (Ethereum-compatible)
@@ -95,7 +95,7 @@ const (
 	scryptDKLen = 32
 )
 
-func trusteesPaths(b *backend) []*framework.Path {
+func trusteesPaths(b *PluginBackend) []*framework.Path {
 	return []*framework.Path{
 		&framework.Path{
 			Pattern: "trustees/?",
@@ -259,7 +259,7 @@ Create a JWT containing claims. Sign with trustees ECDSA private key.
 	}
 }
 
-func (b *backend) pathTrusteesRead(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *PluginBackend) pathTrusteesRead(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	_, err := b.configured(ctx, req)
 	if err != nil {
 		return nil, err
@@ -282,7 +282,7 @@ func (b *backend) pathTrusteesRead(ctx context.Context, req *logical.Request, da
 	}, nil
 }
 
-func (b *backend) pathTrusteesCreate(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *PluginBackend) pathTrusteesCreate(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	_, err := b.configured(ctx, req)
 	if err != nil {
 		return nil, err
@@ -305,7 +305,7 @@ func (b *backend) pathTrusteesCreate(ctx context.Context, req *logical.Request, 
 	publicKeyBytes := crypto.FromECDSAPub(publicKeyECDSA)
 	publicKeyString := hexutil.Encode(publicKeyBytes)[4:]
 
-	hash := sha3.NewKeccak256()
+	hash := sha3.NewLegacyKeccak256()
 	hash.Write(publicKeyBytes[1:])
 	address := hexutil.Encode(hash.Sum(nil)[12:])
 
@@ -331,7 +331,7 @@ func (b *backend) pathTrusteesCreate(ctx context.Context, req *logical.Request, 
 	}, nil
 }
 
-func (b *backend) pathTrusteesDelete(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *PluginBackend) pathTrusteesDelete(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	_, err := b.configured(ctx, req)
 	if err != nil {
 		return nil, err
@@ -356,7 +356,7 @@ func (b *backend) pathTrusteesDelete(ctx context.Context, req *logical.Request, 
 	return nil, nil
 }
 
-func (b *backend) pathTrusteesList(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *PluginBackend) pathTrusteesList(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	_, err := b.configured(ctx, req)
 	if err != nil {
 		return nil, err
@@ -368,7 +368,7 @@ func (b *backend) pathTrusteesList(ctx context.Context, req *logical.Request, da
 	return logical.ListResponse(vals), nil
 }
 
-func (b *backend) pathExportCreate(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *PluginBackend) pathExportCreate(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	_, err := b.configured(ctx, req)
 	if err != nil {
 		return nil, err
@@ -407,7 +407,7 @@ func (b *backend) pathExportCreate(ctx context.Context, req *logical.Request, da
 	}, nil
 }
 
-func (b *backend) pathCreateJWT(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *PluginBackend) pathCreateJWT(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	_, err := b.configured(ctx, req)
 	if err != nil {
 		return nil, err
@@ -508,7 +508,7 @@ func PrettyPrint(v interface{}) string {
 	return out.String()
 }
 
-func (b *backend) verifySignature(ctx context.Context, req *logical.Request, data *framework.FieldData, name string) (*logical.Response, error) {
+func (b *PluginBackend) verifySignature(ctx context.Context, req *logical.Request, data *framework.FieldData, name string) (*logical.Response, error) {
 	_, err := b.configured(ctx, req)
 	if err != nil {
 		return nil, err
@@ -663,7 +663,7 @@ func toISO8601(t time.Time) string {
 	return fmt.Sprintf("%04d-%02d-%02dT%02d-%02d-%02d.%09d%s", t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), tz)
 }
 
-func (b *backend) pathEncrypt(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *PluginBackend) pathEncrypt(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	_, err := b.configured(ctx, req)
 	if err != nil {
 		return nil, err
@@ -703,7 +703,7 @@ func (b *backend) pathEncrypt(ctx context.Context, req *logical.Request, data *f
 
 }
 
-func (b *backend) pathDecrypt(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *PluginBackend) pathDecrypt(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	_, err := b.configured(ctx, req)
 	if err != nil {
 		return nil, err

@@ -23,8 +23,8 @@ import (
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/hashicorp/vault/logical"
-	"github.com/hashicorp/vault/logical/framework"
+	"github.com/hashicorp/vault/sdk/framework"
+	"github.com/hashicorp/vault/sdk/logical"
 )
 
 // Audience is a public key known to vault. A Trustee has an address (Ethereum-compatible)
@@ -33,7 +33,7 @@ type Audience struct {
 	PublicKey string `json:"public_key"`
 }
 
-func audiencesPaths(b *backend) []*framework.Path {
+func audiencesPaths(b *PluginBackend) []*framework.Path {
 	return []*framework.Path{
 		&framework.Path{
 			Pattern: "audiences/?",
@@ -70,7 +70,7 @@ Creates (or updates) an audience.
 	}
 }
 
-func (b *backend) pathAudiencesList(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *PluginBackend) pathAudiencesList(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	_, err := b.configured(ctx, req)
 	if err != nil {
 		return nil, err
@@ -82,7 +82,7 @@ func (b *backend) pathAudiencesList(ctx context.Context, req *logical.Request, d
 	return logical.ListResponse(vals), nil
 }
 
-func (b *backend) pathAudiencesCreate(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *PluginBackend) pathAudiencesCreate(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	_, err := b.configured(ctx, req)
 	if err != nil {
 		return nil, err
@@ -118,7 +118,7 @@ func (b *backend) pathAudiencesCreate(ctx context.Context, req *logical.Request,
 	}, nil
 }
 
-func (b *backend) pathAudiencesRead(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *PluginBackend) pathAudiencesRead(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	_, err := b.configured(ctx, req)
 	if err != nil {
 		return nil, err
@@ -142,7 +142,7 @@ func (b *backend) pathAudiencesRead(ctx context.Context, req *logical.Request, d
 	}, nil
 }
 
-func (b *backend) readAudience(ctx context.Context, req *logical.Request, name string) (*Audience, error) {
+func (b *PluginBackend) readAudience(ctx context.Context, req *logical.Request, name string) (*Audience, error) {
 	path := fmt.Sprintf("audiences/%s", name)
 	entry, err := req.Storage.Get(ctx, path)
 	if err != nil {
@@ -162,7 +162,7 @@ func (b *backend) readAudience(ctx context.Context, req *logical.Request, name s
 	return &audience, nil
 }
 
-func (b *backend) pathAudiencesDelete(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *PluginBackend) pathAudiencesDelete(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	_, err := b.configured(ctx, req)
 	if err != nil {
 		return nil, err
@@ -173,7 +173,7 @@ func (b *backend) pathAudiencesDelete(ctx context.Context, req *logical.Request,
 	return nil, nil
 }
 
-func (b *backend) pathEncryptForAudience(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *PluginBackend) pathEncryptForAudience(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	_, err := b.configured(ctx, req)
 	if err != nil {
 		return nil, err
@@ -197,7 +197,7 @@ func (b *backend) pathEncryptForAudience(ctx context.Context, req *logical.Reque
 
 }
 
-func (b *backend) encryptForAudience(ctx context.Context, audience *Audience, plaintext string) (string, error) {
+func (b *PluginBackend) encryptForAudience(ctx context.Context, audience *Audience, plaintext string) (string, error) {
 
 	publicKeyBytes, err := hex.DecodeString(audience.PublicKey)
 	if err != nil {
@@ -220,7 +220,7 @@ func (b *backend) encryptForAudience(ctx context.Context, audience *Audience, pl
 
 }
 
-func (b *backend) encryptClaims(ctx context.Context, audience *Audience, claims jwt.MapClaims) (jwt.MapClaims, error) {
+func (b *PluginBackend) encryptClaims(ctx context.Context, audience *Audience, claims jwt.MapClaims) (jwt.MapClaims, error) {
 	encryptedClaims := make(jwt.MapClaims)
 	for key, value := range claims {
 		ciphertext, err := b.encryptForAudience(ctx, audience, value.(string))

@@ -25,11 +25,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/hashicorp/vault/logical"
-	"github.com/hashicorp/vault/logical/framework"
+	"github.com/hashicorp/vault/sdk/framework"
+	"github.com/hashicorp/vault/sdk/logical"
 )
 
-func verifyPaths(b *backend) []*framework.Path {
+func verifyPaths(b *PluginBackend) []*framework.Path {
 	return []*framework.Path{
 		&framework.Path{
 			Pattern:      "verify",
@@ -53,7 +53,7 @@ Validate that this trustee made a claim.
 	}
 }
 
-func (b *backend) pathVerifyClaim(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *PluginBackend) pathVerifyClaim(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	_, err := b.configured(ctx, req)
 	if err != nil {
 		return nil, err
@@ -68,7 +68,7 @@ func (b *backend) pathVerifyClaim(ctx context.Context, req *logical.Request, dat
 	return nil, fmt.Errorf("Error verifying token")
 }
 
-func (b *backend) verifyClaim(ctx context.Context, rawToken string) (jwt.MapClaims, *ecdsa.PublicKey, error) {
+func (b *PluginBackend) verifyClaim(ctx context.Context, rawToken string) (jwt.MapClaims, *ecdsa.PublicKey, error) {
 	tokenWithoutWhitespace := regexp.MustCompile(`\s*$`).ReplaceAll([]byte(rawToken), []byte{})
 	token := string(tokenWithoutWhitespace)
 

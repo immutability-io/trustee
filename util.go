@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/hashicorp/vault/logical"
+	"github.com/hashicorp/vault/sdk/logical"
 )
 
 const (
@@ -55,18 +55,18 @@ func prettyPrint(v interface{}) string {
 	return out.String()
 }
 
-func (b *backend) writeTemporaryKeystoreFile(path string, filename string, data []byte) (string, error) {
+func (b *PluginBackend) writeTemporaryKeystoreFile(path string, filename string, data []byte) (string, error) {
 	keystorePath := path + "/" + filename
 	err := ioutil.WriteFile(keystorePath, data, 0644)
 	return keystorePath, err
 }
 
-func (b *backend) createTemporaryKeystoreDirectory() (string, error) {
+func (b *PluginBackend) createTemporaryKeystoreDirectory() (string, error) {
 	dir, err := ioutil.TempDir("", "keystore")
 	return dir, err
 }
 
-func (b *backend) removeTemporaryKeystore(path string) error {
+func (b *PluginBackend) removeTemporaryKeystore(path string) error {
 	return os.RemoveAll(path)
 }
 
@@ -89,7 +89,7 @@ func parseURL(url string) (accounts.URL, error) {
 	}, nil
 }
 
-func (b *backend) importJSONKeystore(ctx context.Context, keystorePath string, passphrase string) (*ecdsa.PrivateKey, error) {
+func (b *PluginBackend) importJSONKeystore(ctx context.Context, keystorePath string, passphrase string) (*ecdsa.PrivateKey, error) {
 	var key *keystore.Key
 	jsonKeystore, err := b.readJSONKeystore(keystorePath)
 	if err != nil {
@@ -115,7 +115,7 @@ func pathExists(ctx context.Context, req *logical.Request, path string) (bool, e
 	return out != nil, nil
 }
 
-func (b *backend) readJSONKeystore(keystorePath string) ([]byte, error) {
+func (b *PluginBackend) readJSONKeystore(keystorePath string) ([]byte, error) {
 	var jsonKeystore []byte
 	file, err := os.Open(keystorePath)
 	defer file.Close()
@@ -137,7 +137,7 @@ func (b *backend) readJSONKeystore(keystorePath string) ([]byte, error) {
 
 }
 
-func (b *backend) readTrustee(ctx context.Context, req *logical.Request, name string) (*Trustee, error) {
+func (b *PluginBackend) readTrustee(ctx context.Context, req *logical.Request, name string) (*Trustee, error) {
 	path := fmt.Sprintf("trustees/%s", name)
 	entry, err := req.Storage.Get(ctx, path)
 	if err != nil {
@@ -157,7 +157,7 @@ func (b *backend) readTrustee(ctx context.Context, req *logical.Request, name st
 	return &trustee, nil
 }
 
-func (b *backend) contains(stringSlice []string, searchString string) bool {
+func (b *PluginBackend) contains(stringSlice []string, searchString string) bool {
 	for _, value := range stringSlice {
 		if value == searchString {
 			return true

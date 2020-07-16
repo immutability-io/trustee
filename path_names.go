@@ -18,8 +18,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/hashicorp/vault/logical"
-	"github.com/hashicorp/vault/logical/framework"
+	"github.com/hashicorp/vault/sdk/framework"
+	"github.com/hashicorp/vault/sdk/logical"
 )
 
 // AccountNames holds a list of names
@@ -27,7 +27,7 @@ type AccountNames struct {
 	Names []string `json:"names"`
 }
 
-func namesPaths(b *backend) []*framework.Path {
+func namesPaths(b *PluginBackend) []*framework.Path {
 	return []*framework.Path{
 		&framework.Path{
 			Pattern: "names/?",
@@ -80,7 +80,7 @@ func namesPaths(b *backend) []*framework.Path {
 	}
 }
 
-func (b *backend) pathNamesRead(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *PluginBackend) pathNamesRead(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	_, err := b.configured(ctx, req)
 	if err != nil {
 		return nil, err
@@ -104,7 +104,7 @@ func (b *backend) pathNamesRead(ctx context.Context, req *logical.Request, data 
 	}, nil
 }
 
-func (b *backend) pathNamesList(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *PluginBackend) pathNamesList(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	_, err := b.configured(ctx, req)
 	if err != nil {
 		return nil, err
@@ -117,7 +117,7 @@ func (b *backend) pathNamesList(ctx context.Context, req *logical.Request, data 
 	return logical.ListResponse(vals), nil
 }
 
-func (b *backend) readName(ctx context.Context, req *logical.Request, name string) (*AccountAddress, error) {
+func (b *PluginBackend) readName(ctx context.Context, req *logical.Request, name string) (*AccountAddress, error) {
 	path := fmt.Sprintf("names/%s", name)
 	entry, err := req.Storage.Get(ctx, path)
 	if err != nil {
@@ -137,7 +137,7 @@ func (b *backend) readName(ctx context.Context, req *logical.Request, name strin
 	return &accountAddress, nil
 }
 
-func (b *backend) pathNamesVerify(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *PluginBackend) pathNamesVerify(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	_, err := b.configured(ctx, req)
 	if err != nil {
 		return nil, err

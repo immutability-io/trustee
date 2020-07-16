@@ -3,3 +3,5 @@
 **/data/*.json
 **/test
 **/releases/*
+**/scripts
+**/scripts/*.sh

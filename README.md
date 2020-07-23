@@ -2,7 +2,116 @@
 
 A Vault plugin that solves for trust in a decentralized way
 
-## Overview
+## Just the Facts Ma'am
+
+Follows describes how to install and use the plugin.
+
+### The Plugin Directory
+
+Vault must be configured to be aware of plugins. This is done with a stanza in the Vault configuration file. Assume that `/Users/immutability/etc/vault.d/vault_plugins` is where you intend to place the binary files for the plugins. Then, your Vault configuration file needs to have this stanza:
+
+```json
+plugin_directory = "/Users/immutability/etc/vault.d/vault_plugins"
+```
+
+### The Plugin Catalog
+
+Once the plugin resides in the directory, it needs to be added to the plugin catalog. Assume that the environment variable `HOME = /Users/immutability`.
+
+```sh
+export SHA256=$(shasum -a 256 "$HOME/etc/vault.d/vault_plugins/trustee" | cut -d' ' -f1)
+vault write sys/plugins/catalog/secret/trustee \
+      sha_256="${SHA256}" \
+      command="trustee --ca-cert=$HOME/etc/vault.d/root.crt --client-cert=$HOME/etc/vault.d/vault.crt --client-key=$HOME/etc/vault.d/vault.key"
+```
+
+It should be noted that the 3 bits of key material used to define the command are the same that Vault uses for TLS. It should also be noted that write access to `sys/plugins/catalog/secret` should be restricted to the most privileged users in the Vault ecosystem.
+
+### Enable the Plugin
+
+Enabling the plugin amounts to mounting a path in Vault. The design of the path will usually follow some naming convention.
+
+```sh
+vault secrets enable -path=immutability/sandbox/trust -plugin-name=trustee plugin
+```
+
+### Configure the Plugin
+
+The plugin supports IP whitelisting - which can be configured at the `immutability/sandbox/trust/config` endpoint.
+
+### Create a Trustee
+
+To sign a set of claims, a trustee must be created. This trustee has a name, a private key and an `address`. The address is a condensed form of a public key for the trustee's private key. To trust a set of claims, one simple adds this address to code (it is not sensitive) and matches on it. In this case, the name of the trustee is `root`.
+
+```sh
+$ vault write -f immutability/sandbox/trust/trustees/root
+Key        Value
+---        -----
+address    0x30574b6564486de41c35488737b72eb223386c0c
+```
+
+### Sign a set of claims
+
+THe `root` trustee is making a clain that `darwin` was the `watchmaker`. If you trust `root`, you trust the claims.
+
+```sh
+$ cat claims.json
+{
+    "watchmaker": "darwin"
+}
+
+$ vault write immutability/sandbox/trust/trustees/root/claim claims=@claims.json
+Key          Value
+---          -----
+watchmaker   darwin
+eth          0x4e995ee42fb40c4d00fb49c431d6e204880a546c868f39c1fea6c625bf8a53fc76f7f5de04a72fdc50114cd5f984a72b43f16e9680af89fadddd338b3147403600
+exp          1595358607
+iss          0x30574b6564486de41c35488737b72eb223386c0c
+jti          a34a6299-1cc6-43c6-bab5-111cb2ba5013
+jwt          eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJjb21taXR0ZXIiOiJqcGxvdWdoIiwiZXRoIjoiMHg0ZTk5NWVlNDJmYjQwYzRkMDBmYjQ5YzQzMWQ2ZTIwNDg4MGE1NDZjODY4ZjM5YzFmZWE2YzYyNWJmOGE1M2ZjNzZmN2Y1ZGUwNGE3MmZkYzUwMTE0Y2Q1Zjk4NGE3MmI0M2YxNmU5NjgwYWY4OWZhZGRkZDMzOGIzMTQ3NDAzNjAwIiwiZXhwIjoiMTU5NTM1ODYwNyIsImlzcyI6IjB4MzA1NzRiNjU2NDQ4NmRlNDFjMzU0ODg3MzdiNzJlYjIyMzM4NmMwYyIsImp0aSI6ImEzNGE2Mjk5LTFjYzYtNDNjNi1iYWI1LTExMWNiMmJhNTAxMyIsIm5iZiI6IjE1OTUzNTUwMDciLCJzdWIiOiIweDMwNTc0YjY1NjQ0ODZkZTQxYzM1NDg4NzM3YjcyZWIyMjMzODZjMGMifQ.ovNWQUXszcarIBCG8muT4tKNCQlzZAPXMcUKYE81ljA5FQ1EQYsM-D126mo_V3D1g-duAb5bRzRsBmfIEN2QzA
+nbf          1595355007
+sub          0x30574b6564486de41c35488737b72eb223386c0c
+```
+
+The resultant `jwt` is the signed set of claims.
+
+### Verify a set of claims
+
+The `jwt` can be verified using the `verify` method on the plugin.
+
+```sh
+$ vault write -format=json immutability/sandbox/trust/verify token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJjb21taXR0ZXIiOiJqcGxvdWdoIiwiZXRoIjoiMHg2ZmFkZjQxZjM1YjhkNmFmZDNkM2FmNzU2ZjRlNGU5NzRhNGMzYTU0M2M0OWVjYzU5NmE3ZjU3NmM4MzQxN2IxNWIxNTAwYmIyMDk0NGE4YTAzZTQ3YTMyODc4NWE4OTMwMzEwNTFjMjZiODJmMjFjYTQyYmRiNTE2MWY2NmVkMzAwIiwiZXhwIjoiMTU5NTM1NzkxNyIsImlzcyI6IjB4MmFkZjkzNmI3YjZmMzdlZTQzMTM1ZDViZDY5MDk1MDJjYzA5Yzc3MyIsImp0aSI6IjY2NWE4MjMzLTVlMWUtNGU5Mi1iYzAyLTAyNzQ5YThkNDJiOSIsIm5iZiI6IjE1OTUzNTQzMTciLCJzdWIiOiIweDJhZGY5MzZiN2I2ZjM3ZWU0MzEzNWQ1YmQ2OTA5NTAyY2MwOWM3NzMifQ.xbNPBhl_N0HV7U0Ou6pw6YrLCTcedDCTJkq55raiWVfyECeinzGBwRyXyFyHZ57C6cEqfmi5ykF22EMN1onFXg | jq .
+{
+  "request_id": "3b6a84a2-979d-0ab6-f5e4-b681a7f75117",
+  "lease_id": "",
+  "lease_duration": 0,
+  "renewable": false,
+  "data": {
+    "watchmaker": "darwin",
+    "eth": "0x6fadf41f35b8d6afd3d3af756f4e4e974a4c3a543c49ecc596a7f576c83417b15b1500bb20944a8a03e47a328785a893031051c26b82f21ca42bdb5161f66ed300",
+    "exp": "1595357917",
+    "iss": "0x2adf936b7b6f37ee43135d5bd6909502cc09c773",
+    "jti": "665a8233-5e1e-4e92-bc02-02749a8d42b9",
+    "nbf": "1595354317",
+    "sub": "0x2adf936b7b6f37ee43135d5bd6909502cc09c773"
+  },
+  "warnings": null
+}
+```
+
+The verify method returns the claims. If you trust the issuer `iss` of the Trustee tag, then you can trust the claims.
+
+For example, in bad bash:
+
+```sh
+ISS=$(vault write -format=json immutability/sandbox/trust/verify token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJjb21taXR0ZXIiOiJqcGxvdWdoIiwiZXRoIjoiMHg2ZmFkZjQxZjM1YjhkNmFmZDNkM2FmNzU2ZjRlNGU5NzRhNGMzYTU0M2M0OWVjYzU5NmE3ZjU3NmM4MzQxN2IxNWIxNTAwYmIyMDk0NGE4YTAzZTQ3YTMyODc4NWE4OTMwMzEwNTFjMjZiODJmMjFjYTQyYmRiNTE2MWY2NmVkMzAwIiwiZXhwIjoiMTU5NTM1NzkxNyIsImlzcyI6IjB4MmFkZjkzNmI3YjZmMzdlZTQzMTM1ZDViZDY5MDk1MDJjYzA5Yzc3MyIsImp0aSI6IjY2NWE4MjMzLTVlMWUtNGU5Mi1iYzAyLTAyNzQ5YThkNDJiOSIsIm5iZiI6IjE1OTUzNTQzMTciLCJzdWIiOiIweDJhZGY5MzZiN2I2ZjM3ZWU0MzEzNWQ1YmQ2OTA5NTAyY2MwOWM3NzMifQ.xbNPBhl_N0HV7U0Ou6pw6YrLCTcedDCTJkq55raiWVfyECeinzGBwRyXyFyHZ57C6cEqfmi5ykF22EMN1onFXg | jq -r .data.iss)
+
+if [ $ISS = "0x2adf936b7b6f37ee43135d5bd6909502cc09c773" ]; then
+    echo "I trust you"
+fi
+```
+
+## More Flowery Prose
 
 We live in a dynamic world. So does our software. As such, there are challenges for the security practioner. In the old days, services had well-known IP addresses and we could use knowledge of such things to design webs of trust: perhaps certain kinds of requests would only be trusted if they originated from a well-known IP address. Vault's AppRole authentication mechanism can work this way: we may not trust an application's use of credentials if they don't originate from the IP address range that we are expecting.
 
